@@ -8,8 +8,8 @@ import {FlowData} from "../Common/SFHelper.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "./dHedgeHelper.sol";
-import "./dHedgeStorage.sol";
+import "./Libraries/dHedgeHelper.sol";
+import "./Libraries/dHedgeStorage.sol";
 // import "hardhat/console.sol";
 
 /**
@@ -130,6 +130,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @return Boolean indicating working status of core
     function checkCoreActive() external view returns (bool) {
         return poolData.isActive;
+    }
+
+    /// @notice Gets pool address
+    /// @return Returns address of the dHedge pool this core contract serves
+    function getPoolLogic() external view returns (address) {
+        return poolData.poolLogic;
     }
 
     /// @dev Helper function that's called after agreements are created, updated or terminated

@@ -16,7 +16,7 @@ import "hardhat/console.sol";
  */
 // solhint-disable reason-string
 // solhint-disable-next-line contract-name-camelcase
-contract dHedgeUpkeep is Ownable {
+contract dHedgeUpkeep is Ownable, IdHedgeUpkeep {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     EnumerableSet.AddressSet private upkeepSet;
@@ -31,6 +31,9 @@ contract dHedgeUpkeep is Ownable {
         );
 
         upkeepSet.add(_contract);
+
+        // solhint-disable-next-line not-rely-on-time
+        emit CoreAdded(_contract, block.timestamp);
     }
 
     /// @dev Removes a core contract from upkeep services
@@ -42,11 +45,14 @@ contract dHedgeUpkeep is Ownable {
         );
 
         upkeepSet.remove(_contract);
+
+        // solhint-disable-next-line not-rely-on-time
+        emit CoreRemoved(_contract, block.timestamp);
     }
 
     /// @dev Calls deposit function in a core contract. Should be used by keepers.
     /// @param _contract Address of the core contract
-    function callFunction(address _contract) external {
+    function callFunction(address _contract) external override {
         try IdHedgeCore(_contract).dHedgeDeposit() {
             console.log("Check successful for contract %s", _contract);
         } catch (bytes memory error) {
@@ -57,12 +63,16 @@ contract dHedgeUpkeep is Ownable {
             );
             console.logBytes(error);
         }
+
+        // solhint-disable-next-line not-rely-on-time
+        emit DepositCalled(_contract, block.timestamp);
     }
 
     /// @dev Function which checks if any of the registered core contracts require upkeep
     function checker()
         external
         view
+        override
         returns (bool _canExec, bytes memory _execPayload)
     {
         for (uint256 i = 0; i < upkeepSet.length(); ++i) {

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
 
-import {IPoolLogic, IPoolManagerLogic} from "./Interfaces/IdHedge.sol";
-import {IdHedgeBank} from "./Interfaces/ISuperdHedge.sol";
+import {IPoolLogic, IPoolManagerLogic} from "../Interfaces/IdHedge.sol";
+import {IdHedgeBank} from "../Interfaces/ISuperdHedge.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./dHedgeStorage.sol";
-import "../Common/SFHelper.sol";
+import "../../Common/SFHelper.sol";
 import "hardhat/console.sol";
 
 /**
@@ -21,6 +21,33 @@ library dHedgeHelper {
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
     using SFHelper for *;
+
+    event TokenDeposited(
+        address _token,
+        uint256 _amount,
+        uint256 _liquidityMinted
+    );
+    event FundsDeposited(address _dHedgeCore, uint256 _timestamp);
+
+    event LiquidityMoved(
+        address _dHedgeCore,
+        uint256 _amount,
+        uint256 _timestamp
+    );
+
+    event LiquidityWithdrawn(
+        address _dHedgeCore,
+        address _user,
+        uint256 _amount,
+        uint256 _timestamp
+    );
+
+    event UninvestedWithdrawn(
+        address _dHedgeCore,
+        address _user,
+        address _token,
+        uint256 _amount
+    );
 
     /**
      * @dev Function to deposit tokens into a dHedge pool
@@ -85,12 +112,23 @@ library dHedgeHelper {
                     _dHedgePool.lendingData[_prevIndex + 1][
                         _depositToken
                     ] = _currState;
+
+                    emit TokenDeposited(
+                        _depositToken,
+                        _depositBalance,
+                        _liquidityMinted
+                    );
                 }
             }
         }
 
         // Update current market index
         ++_dHedgePool.currIndex;
+
+        emit FundsDeposited(
+            address(this),
+            block.timestamp // solhint-disable-line not-rely-on-time
+        );
     }
 
     /**
@@ -116,6 +154,12 @@ library dHedgeHelper {
             IdHedgeBank(_dHedgePool.bank).deposit(
                 _dHedgePool.poolLogic,
                 _balance
+            );
+
+            emit LiquidityMoved(
+                address(this),
+                _balance,
+                block.timestamp // solhint-disable-line not-rely-on-time
             );
         }
     }
@@ -152,6 +196,13 @@ library dHedgeHelper {
             msg.sender,
             _amount
         );
+
+        emit LiquidityWithdrawn(
+            address(this),
+            msg.sender,
+            _amount,
+            block.timestamp // solhint-disable-line not-rely-on-time
+        );
     }
 
     /**
@@ -181,6 +232,13 @@ library dHedgeHelper {
 
                 IERC20(_dHedgePool.superToken[_token]).safeTransfer(
                     msg.sender,
+                    _uninvestedAmount
+                );
+
+                emit UninvestedWithdrawn(
+                    address(this),
+                    msg.sender,
+                    _token,
                     _uninvestedAmount
                 );
             }
@@ -220,6 +278,13 @@ library dHedgeHelper {
         IERC20(_dHedgePool.superToken[_token]).safeTransfer(
             msg.sender,
             _amount
+        );
+
+        emit UninvestedWithdrawn(
+            address(this),
+            msg.sender,
+            _token,
+            _uninvestedAmount
         );
     }
 
@@ -291,7 +356,7 @@ library dHedgeHelper {
      * @param _withdraw Boolean representing if the calculation should be done with respect to withdrawal
      * @return User's share amount for an invested amount of a token
      * As this function is used to update total share amount of a user when updating his/her flow, it is
-     * necessary to use a boolean depicting if the calculation is being done as a part of update flow or 
+     * necessary to use a boolean depicting if the calculation is being done as a part of update flow or
      * as part of withdrawable calculation. For withdrawable calculation, it will account for cooldown period.
      */
     function calcUserShare(

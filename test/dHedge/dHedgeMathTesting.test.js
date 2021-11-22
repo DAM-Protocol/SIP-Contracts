@@ -814,7 +814,7 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         console.log("Uninvested amount left: ", (await core.calcUserUninvested(admin.address, DAIContract.address)).toString());
-        console.log("calcWithdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
+        console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
     });
 
     it("Should be able to calculate amounts correctly after withdrawal of uninvested amount (multi-token)", async () => {
@@ -933,7 +933,7 @@ describe("dHedgeCore Math Testing", function () {
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         console.log("Uninvested amount of DAIx left: ", (await core.calcUserUninvested(admin.address, DAIContract.address)).toString());
         console.log("Uninvested amount of USDCx left: ", (await core.calcUserUninvested(admin.address, USDCContract.address)).toString());
-        console.log("calcWithdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
+        console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
         console.log("Current LP tokens balance of core: ", (await coreToken.balanceOf(bank.address)).toString());
     });
 
@@ -1048,7 +1048,7 @@ describe("dHedgeCore Math Testing", function () {
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         console.log("Uninvested amount of DAIx left: ", (await core.calcUserUninvested(admin.address, DAIContract.address)).toString());
         console.log("Uninvested amount of USDCx left: ", (await core.calcUserUninvested(admin.address, USDCContract.address)).toString());
-        console.log("calcWithdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
+        console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
         console.log("Current LP tokens balance of bank: ", (await coreToken.balanceOf(bank.address)).toString());
     });
 
@@ -1165,6 +1165,6 @@ describe("dHedgeCore Math Testing", function () {
         await core.moveLPT();
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        console.log("calcWithdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
+        console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
     });
 });

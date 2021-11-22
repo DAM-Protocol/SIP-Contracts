@@ -4,7 +4,7 @@ pragma solidity ^0.8.4;
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {FlowData} from "../Common/SFHelper.sol";
+import {FlowData} from "../../Common/SFHelper.sol";
 
 /**
  * @title dHedge storage library

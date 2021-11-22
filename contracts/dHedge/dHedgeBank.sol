@@ -25,11 +25,11 @@ contract dHedgeBank is Ownable, IdHedgeBank {
     function deposit(address _poolToken, uint256 _amount) external override {
         require(
             _isContract(msg.sender),
-            "dHedgeBank: depositor not a contract"
+            "dHedgeBank: Depositor not a contract"
         );
         require(
             Ownable(msg.sender).owner() == owner(),
-            "dHedgeBank: owner of deposit contract not authorised"
+            "dHedgeBank: Owner of deposit contract not authorised"
         );
 
         IERC20(_poolToken).safeTransferFrom(msg.sender, address(this), _amount);
@@ -47,15 +47,15 @@ contract dHedgeBank is Ownable, IdHedgeBank {
     ) external override {
         require(
             _isContract(msg.sender),
-            "dHedgeBank: withdrawer not a contract"
+            "dHedgeBank: Withdrawer not a contract"
         );
         require(
             Ownable(msg.sender).owner() == owner(),
-            "dHedgeBank: owner of deposit contract not authorised"
+            "dHedgeBank: Owner of deposit contract not authorised"
         );
         require(
             depositContracts[msg.sender][_poolToken] >= _amount,
-            "dHedgeBank: amount exceeds limit"
+            "dHedgeBank: Amount exceeds limit"
         );
 
         depositContracts[msg.sender][_poolToken] -= _amount;

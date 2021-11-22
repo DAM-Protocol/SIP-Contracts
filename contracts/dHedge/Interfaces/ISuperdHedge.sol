@@ -20,6 +20,10 @@ interface IdHedgeBank {
 }
 
 interface IdHedgeUpkeep {
+    event CoreAdded(address _dHedgeCore, uint256 _timestamp);
+    event CoreRemoved(address _dHedgeCore, uint256 _timestamp);
+    event DepositCalled(address _dHedgeCore, uint256 _timestamp);
+
     function callFunction(address _contract) external;
 
     function checker()
