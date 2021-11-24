@@ -4,6 +4,7 @@ pragma solidity ^0.8.4;
 import {IdHedgeBank} from "./Interfaces/ISuperdHedge.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 // import "hardhat/console.sol";
 
 /**
@@ -60,6 +61,16 @@ contract dHedgeBank is Ownable, IdHedgeBank {
 
         depositContracts[msg.sender][_poolToken] -= _amount;
         IERC20(_poolToken).safeTransfer(_user, _amount);
+    }
+
+    /// @dev Function to withdraw a token in case of emergency
+    /// @param _token Address of the pool token
+    /// Remove/Modify this function after testing
+    function emergencyWithdraw(address _token) external onlyOwner {
+        IERC20(_token).safeTransfer(
+            owner(),
+            IERC20(_token).balanceOf(address(this))
+        );
     }
 
     /// @dev Checks if a given address is a contract or not

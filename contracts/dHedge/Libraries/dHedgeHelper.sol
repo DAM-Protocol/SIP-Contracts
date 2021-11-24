@@ -27,7 +27,7 @@ library dHedgeHelper {
         uint256 _amount,
         uint256 _liquidityMinted
     );
-    event FundsDeposited(address _dHedgeCore, uint256 _timestamp);
+    event FundsDeposited(address _dHedgeCore, uint256 _currIndex, uint256 _timestamp);
 
     event LiquidityMoved(
         address _dHedgeCore,
@@ -54,6 +54,9 @@ library dHedgeHelper {
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
      * @dev Add code to collect fees later on.
      * Doesn't deposit an asset which isn't currently accepted as deposit asset.
+     * This function can exceed gas limits if there are a lot of tokens to be deposited.
+     * Consider making a function which deposits one token at a time and automate the deposits using keepers.
+     * This way we won't have to worry about keeper failing to execute the deposit function.
      */
     function deposit(dHedgeStorage.dHedgePool storage _dHedgePool) external {
         IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
@@ -127,6 +130,7 @@ library dHedgeHelper {
 
         emit FundsDeposited(
             address(this),
+            _dHedgePool.currIndex,
             block.timestamp // solhint-disable-line not-rely-on-time
         );
     }

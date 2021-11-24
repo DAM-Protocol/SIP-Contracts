@@ -8,6 +8,8 @@ require("hardhat-gas-reporter");
 require("solidity-coverage");
 require('hardhat-contract-sizer');
 require("hardhat-tracer");
+require("hardhat-deploy");
+require("./tasks/dHedge/CreateSIP");
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -22,15 +24,19 @@ require("hardhat-tracer");
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 21170576,
+        blockNumber: 21741539,
         enabled: true
       },
+      blockGasLimit: 20000000,
+      gasPrice: 300000000000,
       accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}]
     },
-    kovan: {
-      url: process.env.KOVAN_NODE_URL || "",
-      blockNumber: 28162760
-    },
+    polygon :{
+      url: process.env.POLYGON_NODE_URL,
+      blockGasLimit: 20000000,
+      gasPrice: 300000000000,
+      accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
+    }
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
@@ -43,6 +49,11 @@ require("hardhat-tracer");
     alphaSort: true,
     disambiguatePaths: false,
     runOnCompile: true
+  },
+  namedAccounts: {
+    deployer: {
+      default: "0x452181dAe31Cf9f42189df71eC64298993BEe6d3"
+    }
   },
   mocha: {
     timeout: 0

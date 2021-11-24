@@ -13,10 +13,11 @@ const {
     increaseTime,
     impersonateAccounts
 } = require("../../helpers/helpers");
-const { defaultAbiCoder } = require("ethers/lib/utils");
+
 const { constants, ContractFactory } = require("ethers");
 // const { deployMockContract } = require("ethereum-waffle");
 const CoreABI = require("../../artifacts/contracts/dHedge/dHedgeCore.sol/dHedgeCore.json");
+const { defaultAbiCoder } = require("ethers/lib/utils");
 
 const DAI = {
     token: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
@@ -44,7 +45,7 @@ const Pool5 = "0xc28b6d9cb7bda6d0db62f8ab5714c8edafe22194";
 const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
 const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
 
-describe("dHedgeCore Math Testing", function () {
+describe("dHedgeUpkeep Testing", function () {
     const [admin] = provider.getWallets();
 
     let sf;
@@ -111,7 +112,7 @@ describe("dHedgeCore Math Testing", function () {
     async function deployContracts() {
         mockCore = await deployMockContract(admin, CoreABI.abi);
 
-        dHedgeUpkeepFactory = await ethers.getContractFactory("dHedgeUpkeep", admin);
+        dHedgeUpkeepFactory = await ethers.getContractFactory("dHedgeUpkeepChainlink", admin);
         upkeep = await dHedgeUpkeepFactory.deploy();
         await upkeep.deployed();
 
@@ -135,8 +136,6 @@ describe("dHedgeCore Math Testing", function () {
         // coreToken = await ethers.getContractAt("IERC20", Pool2);
 
         await core.deployed();
-
-        await upkeep.addContract(core.address);
 
         await fundAndApproveSuperTokens();
     }
@@ -165,7 +164,7 @@ describe("dHedgeCore Math Testing", function () {
             [
                 101,
                 superTokenAddress,
-                ethers.utils.defaultAbiCoder.encode(
+                defaultAbiCoder.encode(
                     ["uint256"],
                     [parseUnits(upgradeAmount, 18).toString()]
                 )
@@ -173,7 +172,7 @@ describe("dHedgeCore Math Testing", function () {
             [
                 201,
                 sf.agreements.cfa.address,
-                ethers.utils.defaultAbiCoder.encode(
+                defaultAbiCoder.encode(
                     ["bytes", "bytes"],
                     [
                         sf.agreements.cfa.contract.methods
@@ -215,10 +214,10 @@ describe("dHedgeCore Math Testing", function () {
 
         await mockCore.mock.requireUpkeep.returns(true);
 
-        expect((await upkeep.checker())._canExec).to.equal(true);
+        expect((await upkeep.checkUpkeep("0x")).upkeepNeeded).to.equal(true);
     });
 
-    it("Should execute deposit function", async () => {
+    it.only("Should execute deposit function", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -233,14 +232,18 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        result = await upkeep.checker();
+        await upkeep.addContract(core.address);
 
-        expect(result._canExec).to.equal(true);
-        
-        await upkeep.callFunction(core.address);
+        result = await upkeep.checkUpkeep("0x");
 
-        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+        expect(result.upkeepNeeded).to.equal(true);
         
+        tx = await upkeep.performUpkeep(result.performData);
+        receipt = await provider.getTransactionReceipt(tx.hash);
+        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();        
+
+        console.log("Gas used: ", receipt.gasUsed.toString());
+
         expect(await coreToken.balanceOf(core.address)).to.not.equal(constants.Zero);
     });
 });

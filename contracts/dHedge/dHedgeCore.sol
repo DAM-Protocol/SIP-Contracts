@@ -62,6 +62,16 @@ contract dHedgeCore is Ownable, SuperAppBase {
             : poolData.host.registerAppWithKey(_configWord, _regKey);
     }
 
+    /// @dev Function to withdraw a token in case of emergency
+    /// @param _token Address of the pool token
+    /// Remove/Modify this function after testing
+    function emergencyWithdraw(address _token) external onlyOwner {
+        IERC20(_token).safeTransfer(
+            owner(),
+            IERC20(_token).balanceOf(address(this))
+        );
+    }
+    
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     function dHedgeDeposit() external {
         _onlyActive();
