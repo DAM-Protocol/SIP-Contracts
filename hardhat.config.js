@@ -10,6 +10,7 @@ require('hardhat-contract-sizer');
 require("hardhat-tracer");
 require("hardhat-deploy");
 require("./tasks/dHedge/CreateSIP");
+require("./tasks/dHedge/AddContract");
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -24,7 +25,7 @@ require("./tasks/dHedge/CreateSIP");
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 21741539,
+        blockNumber: 21772274,
         enabled: true
       },
       blockGasLimit: 20000000,

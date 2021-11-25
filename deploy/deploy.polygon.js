@@ -34,11 +34,11 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
         skipIfAlreadyDeployed: true
     });
     
-    // const dHedgeUpkeep = await deploy("dHedgeUpkeep", {
-    //     from: deployer,
-    //     log: true,
-    //     skipIfAlreadyDeployed: true
-    // });
+    const dHedgeUpkeep = await deploy("dHedgeUpkeepChainlink", {
+        from: deployer,
+        log: true,
+        skipIfAlreadyDeployed: true
+    });
 
     console.info("\n--Infrastructure setup complete !--\n");
 }
