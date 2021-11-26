@@ -29,13 +29,13 @@ require("./tasks/dHedge/AddContract");
         enabled: true
       },
       blockGasLimit: 20000000,
-      gasPrice: 300000000000,
+      gasPrice: 30000000000,
       accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}]
     },
     polygon :{
       url: process.env.POLYGON_NODE_URL,
       blockGasLimit: 20000000,
-      gasPrice: 300000000000,
+      gasPrice: 30000000000,
       accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
     }
   },
@@ -44,7 +44,7 @@ require("./tasks/dHedge/AddContract");
     currency: "USD",
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: process.env.POLYGONSCAN_KEY,
   },
   contractSizer: {
     alphaSort: true,

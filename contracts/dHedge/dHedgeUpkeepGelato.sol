@@ -54,7 +54,7 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
     /// @param _contract Address of the core contract
     function callFunction(address _contract) external override {
         try IdHedgeCore(_contract).dHedgeDeposit() {
-            console.log("Check successful for contract %s", _contract);
+            console.log("Execution successful for contract %s", _contract);
         } catch (bytes memory error) {
             // To allow debugging using Tenderly dashboard
             console.log(

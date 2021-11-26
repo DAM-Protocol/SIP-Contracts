@@ -29,6 +29,7 @@ const USDC = {
 // Convex strategies pool (https://app.dhedge.org/pool/0xb232f192041a121f094c669220dc9573ab18163f)
 // Supports DAI, SUSHI, USDC, USDT, WBTC, USDCContract and WMATIC
 const Pool1 = "0xb232f192041a121f094c669220dc9573ab18163f";
+// const Pool1 = "0x9e859af5f7de3074039bfadfd0cf566749b94924";
 
 // 3313.fi_poly pool (https://app.dhedge.org/pool/0xf5fa47d9ca6269d85965eaa5af78a35b2ce016d4)
 // Supports USDC only
@@ -636,7 +637,7 @@ describe("dHedgeCore Math Testing", function () {
 
     });
 
-    it("Should be able to calculate a user's share correctly (multi-user-single-token)", async() => {
+    it.only("Should be able to calculate a user's share correctly (multi-user-single-token)", async() => {
         await loadFixture(deployContracts);
 
         await web3tx(
