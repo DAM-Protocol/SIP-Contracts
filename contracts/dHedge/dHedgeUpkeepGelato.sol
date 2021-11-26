@@ -19,6 +19,8 @@ import "hardhat/console.sol";
 contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    error DepositFailed(bytes err);
+
     EnumerableSet.AddressSet private upkeepSet;
 
     /// @dev Add a core contract for upkeep
@@ -55,17 +57,19 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
     function callFunction(address _contract) external override {
         try IdHedgeCore(_contract).dHedgeDeposit() {
             console.log("Execution successful for contract %s", _contract);
-        } catch (bytes memory error) {
+            
+            // solhint-disable-next-line not-rely-on-time
+            emit DepositCalled(_contract, block.timestamp);
+        } catch (bytes memory err) {
             // To allow debugging using Tenderly dashboard
             console.log(
                 "Error encountered for contract %s with error: ",
                 _contract
             );
-            console.logBytes(error);
+            console.logBytes(err);
+            
+            revert DepositFailed(err);
         }
-
-        // solhint-disable-next-line not-rely-on-time
-        emit DepositCalled(_contract, block.timestamp);
     }
 
     /// @dev Function which checks if any of the registered core contracts require upkeep
