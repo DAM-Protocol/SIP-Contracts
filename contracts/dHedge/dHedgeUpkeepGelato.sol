@@ -14,79 +14,129 @@ import "hardhat/console.sol";
  * @dev Resolver contract for keepers
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
+// solhint-disable not-rely-on-time
 // solhint-disable reason-string
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
-    using EnumerableSet for EnumerableSet.AddressSet;
+    struct ContractStatus {
+        bool init;
+        bool paused;
+        uint256 lastExecuted;
+    }
 
-    error DepositFailed(bytes err);
-
-    EnumerableSet.AddressSet private upkeepSet;
+    uint256 public allowedInterval;
+    address private constant POKE_ME =
+        0x527a819db1eb0e34426297b03bae11F2f8B3A19E;
+    address[] private contracts;
+    mapping(address => ContractStatus) private upkeepSet;
 
     /// @dev Add a core contract for upkeep
     /// @param _contract Address of the core contract
-    function addContract(address _contract) external onlyOwner {
+    function addContract(address _contract) external {
+        _onlyOwner(msg.sender);
         require(_isContract(_contract), "dHedgeUpkeep: Not a contract");
         require(
-            !upkeepSet.contains(_contract),
-            "dHedgeUpkeep: Contract already present"
+            !upkeepSet[_contract].init,
+            "dHedgeUpkeep: Contract already initialized"
         );
 
-        upkeepSet.add(_contract);
+        upkeepSet[_contract].init = true;
+        contracts.push(_contract);
 
-        // solhint-disable-next-line not-rely-on-time
-        emit CoreAdded(_contract, block.timestamp);
+        emit CoreAdded(_contract);
+    }
+
+    /// @dev Pauses a core contract from upkeep services
+    /// @param _contract Address of the core contract
+    function pauseContract(address _contract) external {
+        _onlyOwner(msg.sender);
+        require(
+            !upkeepSet[_contract].paused,
+            "dHedgeUpkeep: Contract already paused"
+        );
+
+        upkeepSet[_contract].paused = true;
+
+        emit CorePaused(_contract);
+    }
+
+    /// @dev Unpauses a core contract from upkeep services
+    /// @param _contract Address of the core contract
+    function unPauseContract(address _contract) external {
+        _onlyOwner(msg.sender);
+        require(
+            upkeepSet[_contract].paused,
+            "dHedgeUpkeep: Contract already unpaused"
+        );
+
+        upkeepSet[_contract].paused = false;
+
+        emit CoreUnPaused(_contract);
     }
 
     /// @dev Removes a core contract from upkeep services
     /// @param _contract Address of the core contract
-    function removeContract(address _contract) external onlyOwner {
+    function removeContract(address _contract) external {
+        _onlyOwner(msg.sender);
         require(
-            upkeepSet.contains(_contract),
-            "dHedgeUpkeep: Contract not present"
+            upkeepSet[_contract].init,
+            "dHedgeUpkeep: Contract not initialized"
         );
 
-        upkeepSet.remove(_contract);
+        delete upkeepSet[_contract];
 
-        // solhint-disable-next-line not-rely-on-time
-        emit CoreRemoved(_contract, block.timestamp);
+        emit CoreRemoved(_contract);
+    }
+
+    /// @dev Modifies accepted duration between token deposits for a pool
+    /// @param _duration Acceptable difference between previous deposit and current deposit
+    function modifyInterval(uint256 _duration) external {
+        _onlyOwner(msg.sender);
+        allowedInterval = _duration;
     }
 
     /// @dev Calls deposit function in a core contract. Should be used by keepers.
     /// @param _contract Address of the core contract
-    function callFunction(address _contract) external override {
-        try IdHedgeCore(_contract).dHedgeDeposit() {
-            console.log("Execution successful for contract %s", _contract);
-            
-            // solhint-disable-next-line not-rely-on-time
-            emit DepositCalled(_contract, block.timestamp);
-        } catch (bytes memory err) {
-            // To allow debugging using Tenderly dashboard
-            console.log(
-                "Error encountered for contract %s with error: ",
-                _contract
-            );
-            console.logBytes(err);
-            
-            revert DepositFailed(err);
+    /// @param _depositToken Address of the token to be deposited
+    function performUpkeep(address _contract, address _depositToken)
+        external
+        override
+    {
+        if (
+            block.timestamp - upkeepSet[_contract].lastExecuted <=
+            allowedInterval
+        ) {
+            try IdHedgeCore(_contract).dHedgeDeposit(_depositToken) {
+                upkeepSet[_contract].lastExecuted = block.timestamp;
+
+                emit DepositSuccess(_contract, _depositToken);
+            } catch (bytes memory _err) {
+                upkeepSet[_contract].paused = true;
+
+                emit DepositFailed(_contract, _depositToken, _err);
+            }
         }
     }
 
     /// @dev Function which checks if any of the registered core contracts require upkeep
-    function checker()
+    function checkUpkeep()
         external
         view
         override
         returns (bool _canExec, bytes memory _execPayload)
     {
-        for (uint256 i = 0; i < upkeepSet.length(); ++i) {
-            address _contract = upkeepSet.at(i);
-            try IdHedgeCore(_contract).requireUpkeep() returns (bool _result) {
+        for (uint256 i = 0; i < contracts.length; ++i) {
+            address _contract = contracts[i];
+            try IdHedgeCore(_contract).requireUpkeep() returns (
+                bool _result,
+                address _token
+            ) {
                 _canExec = _result;
 
                 _execPayload = abi.encodeWithSelector(
-                    IdHedgeUpkeep.callFunction.selector,
-                    _contract
+                    IdHedgeUpkeep.performUpkeep.selector,
+                    _contract,
+                    _token
                 );
 
                 console.log("Check successful for contract %s", _contract);
@@ -117,5 +167,9 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
         }
         return size > 0;
         /* solhint-enable no-inline-assembly */
+    }
+
+    function _onlyOwner(address _user) internal view {
+        require(_user == owner(), "dHedgeUpkeepGelato: Not the owner");
     }
 }

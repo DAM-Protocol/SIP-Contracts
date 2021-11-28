@@ -16,6 +16,7 @@ import "hardhat/console.sol";
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable reason-string
+// solhint-disable not-rely-on-time
 // solhint-disable contract-name-camelcase
 library dHedgeHelper {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -24,10 +25,10 @@ library dHedgeHelper {
 
     event TokenDeposited(
         address _token,
+        uint256 _tokenMarketIndex,
         uint256 _amount,
         uint256 _liquidityMinted
     );
-    event FundsDeposited(address _dHedgeCore, uint256 _currIndex, uint256 _timestamp);
 
     event LiquidityMoved(
         address _dHedgeCore,
@@ -52,90 +53,90 @@ library dHedgeHelper {
     /**
      * @dev Function to deposit tokens into a dHedge pool
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
-     * @dev Add code to collect fees later on.
-     * Doesn't deposit an asset which isn't currently accepted as deposit asset.
-     * This function can exceed gas limits if there are a lot of tokens to be deposited.
-     * Consider making a function which deposits one token at a time and automate the deposits using keepers.
-     * This way we won't have to worry about keeper failing to execute the deposit function.
+     * @custom:note Add code to collect fees later on.
      */
-    function deposit(dHedgeStorage.dHedgePool storage _dHedgePool) external {
+    function deposit(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _depositToken
+    ) external {
+        // Time difference between last deposit transaction and now
+        uint256 _elapsedTime = block.timestamp - _dHedgePool.lastDepositTime;
+
+        // If time elapsed between two token deposits is greater than 45 minutes then skip deposits till 24 hours are elapsed
+        require(
+            _elapsedTime <= 45 minutes || _elapsedTime >= 24 hours,
+            "dHedgeHelper: Time difference exceeds limit"
+        );
+
         IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
         IPoolManagerLogic _supportLogic = IPoolManagerLogic(
             _poolLogic.poolManagerLogic()
         );
 
-        require(
-            _poolLogic.getExitRemainingCooldown(address(this)) == 0,
-            "dHedgeHelper: Cooldown active"
-        );
-
         // Move the LP tokens accrued till previous deposit cycle if not done already
         moveLPT(_dHedgePool);
 
-        for (uint8 i = 0; i < _dHedgePool.tokenSet.length(); ++i) {
-            address _depositToken = _dHedgePool.tokenSet.at(i);
+        // If the asset is currently accepted as deposit then perform deposit transaction
+        if (_supportLogic.isDepositAsset(_depositToken)) {
+            address _superToken = _dHedgePool
+                .tokenData[_depositToken]
+                .superToken;
 
-            // If the asset is currently accepted as deposit then perform deposit transaction
-            if (_supportLogic.isDepositAsset(_depositToken)) {
-                address _superToken = _dHedgePool.superToken[_depositToken];
+            // Downgrade all supertokens to their underlying tokens
+            _superToken._downgradeToken(
+                IERC20(_superToken).balanceOf(address(this))
+            );
 
-                // Downgrade all supertokens to their underlying tokens
-                _superToken._downgradeToken(
-                    IERC20(_superToken).balanceOf(address(this))
+            uint256 _depositBalance = IERC20(_depositToken).balanceOf(
+                address(this)
+            );
+
+            // Perform deposit transaction iff amount of underlying tokens is greater than 0
+            if (_depositBalance > 0) {
+                // Get the current market index
+                uint256 _prevIndex = _dHedgePool
+                    .tokenData[_depositToken]
+                    .currMarketIndex;
+
+                // Get the current state of the market
+                uint256[3] storage _prevState = _dHedgePool
+                    .tokenData[_depositToken]
+                    .lendingData[_prevIndex];
+
+                // Array depicting future state of the market
+                uint256[3] memory _currState;
+
+                // Deposit the tokens into the dHedge pool
+                uint256 _liquidityMinted = _poolLogic.deposit(
+                    _depositToken,
+                    _depositBalance
                 );
 
-                uint256 _depositBalance = IERC20(_depositToken).balanceOf(
-                    address(this)
+                // Update the state of the market (total deposited, total lp minted, timestamp)
+                _currState[0] = _prevState[0] + _depositBalance;
+                _currState[1] = _prevState[1] + _liquidityMinted;
+                _currState[2] = block.timestamp;
+
+                _dHedgePool.tokenData[_depositToken].lendingData[
+                    _prevIndex + 1
+                ] = _currState;
+
+                // Increment current token market index
+                _dHedgePool.tokenData[_depositToken].currMarketIndex++;
+
+                // Store the timestamp of last time a deposit was made in order to guard against long deposit intervals
+                _dHedgePool.lastDepositTime = block.timestamp;
+
+                emit TokenDeposited(
+                    _depositToken,
+                    _prevIndex + 1,
+                    _depositBalance,
+                    _liquidityMinted
                 );
-
-                // Perform deposit transaction iff amount of underlying tokens is greater than 0
-                if (_depositBalance > 0) {
-                    // Get the current market index
-                    uint256 _prevIndex = _dHedgePool.currIndex;
-
-                    // Get the current state of the market
-                    uint256[3] storage _prevState = _dHedgePool.lendingData[
-                        _prevIndex
-                    ][_depositToken];
-
-                    // Array depicting future state of the market
-                    uint256[3] memory _currState;
-
-                    // Deposit the tokens into the dHedge pool
-                    uint256 _liquidityMinted = _poolLogic.deposit(
-                        _depositToken,
-                        _depositBalance
-                    );
-
-                    // Update the state of the market (total deposited, total lp minted, timestamp)
-                    _currState[0] = _prevState[0] + _depositBalance;
-                    _currState[1] = _prevState[1] + _liquidityMinted;
-                    _currState[2] = block.timestamp; // solhint-disable-line not-rely-on-time
-
-                    _dHedgePool.lendingData[_prevIndex + 1][
-                        _depositToken
-                    ] = _currState;
-
-                    emit TokenDeposited(
-                        _depositToken,
-                        _depositBalance,
-                        _liquidityMinted
-                    );
-                }
             }
         }
-
-        // Update current market index
-        ++_dHedgePool.currIndex;
-
-        emit FundsDeposited(
-            address(this),
-            _dHedgePool.currIndex,
-            block.timestamp // solhint-disable-line not-rely-on-time
-        );
     }
 
-    
     /**
      * @dev Function to move LP tokens to dHedgeBank contract in order to avoid timelock
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
@@ -161,11 +162,7 @@ library dHedgeHelper {
                 _balance
             );
 
-            emit LiquidityMoved(
-                address(this),
-                _balance,
-                block.timestamp // solhint-disable-line not-rely-on-time
-            );
+            emit LiquidityMoved(address(this), _balance, block.timestamp);
         }
     }
 
@@ -206,7 +203,7 @@ library dHedgeHelper {
             address(this),
             msg.sender,
             _amount,
-            block.timestamp // solhint-disable-line not-rely-on-time
+            block.timestamp
         );
     }
 
@@ -217,8 +214,8 @@ library dHedgeHelper {
     function withdrawUninvestedAll(dHedgeStorage.dHedgePool storage _dHedgePool)
         external
     {
-        for (uint8 i = 0; i < _dHedgePool.tokenSet.length(); ++i) {
-            address _token = _dHedgePool.tokenSet.at(i);
+        for (uint8 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
+            address _token = _dHedgePool.tokenSet[i];
             FlowData storage _userFlow = _dHedgePool.userFlows[msg.sender][
                 _token
             ];
@@ -235,7 +232,7 @@ library dHedgeHelper {
                     calcUserShare(_dHedgePool, msg.sender, _token, false)
                 );
 
-                IERC20(_dHedgePool.superToken[_token]).safeTransfer(
+                IERC20(_dHedgePool.tokenData[_token].superToken).safeTransfer(
                     msg.sender,
                     _uninvestedAmount
                 );
@@ -280,7 +277,7 @@ library dHedgeHelper {
             calcUserShare(_dHedgePool, msg.sender, _token, false)
         );
 
-        IERC20(_dHedgePool.superToken[_token]).safeTransfer(
+        IERC20(_dHedgePool.tokenData[_token].superToken).safeTransfer(
             msg.sender,
             _amount
         );
@@ -302,26 +299,48 @@ library dHedgeHelper {
     function requireUpkeep(dHedgeStorage.dHedgePool storage _dHedgePool)
         external
         view
-        returns (bool)
+        returns (bool, address)
     {
-        IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
-        IPoolManagerLogic _supportLogic = IPoolManagerLogic(
-            _poolLogic.poolManagerLogic()
-        );
+        // Time difference between last deposit transaction and now
+        uint256 _elapsedTime = block.timestamp - _dHedgePool.lastDepositTime;
 
-        for (uint256 i = 0; i < _dHedgePool.tokenSet.length(); ++i) {
-            address _depositToken = _dHedgePool.tokenSet.at(i);
-            if (_supportLogic.isDepositAsset(_depositToken)) {
-                address _superToken = _dHedgePool.superToken[_depositToken];
+        // If time elapsed between two token deposits is greater than 45 minutes then skip deposits till 24 hours are elapsed
+        if (_elapsedTime <= 45 minutes || _elapsedTime >= 24 hours) {
+            IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
+            IPoolManagerLogic _supportLogic = IPoolManagerLogic(
+                _poolLogic.poolManagerLogic()
+            );
 
-                if (
-                    IERC20(_superToken).balanceOf(address(this)) > 0 &&
-                    _poolLogic.getExitRemainingCooldown(address(this)) == 0
-                ) return true;
+            // Get assets currently supported by the dHedge pool
+            address[] memory _depositAssets = _supportLogic.getDepositAssets();
+
+            for (uint8 i = 0; i < _depositAssets.length; ++i) {
+                address _depositToken = _depositAssets[i];
+                address _superToken = _dHedgePool
+                    .tokenData[_depositToken]
+                    .superToken;
+
+                // If supertoken for an underlying token exists then proceed with the deposit
+                if (_superToken != address(0)) {
+                    uint256 _currTokenIndex = _dHedgePool
+                        .tokenData[_depositToken]
+                        .currMarketIndex;
+
+                    uint256 _lastLendingTimeDiff = block.timestamp -
+                        _dHedgePool.tokenData[_depositToken].lendingData[
+                            _currTokenIndex
+                        ][2];
+
+                    // If the deposit token hasn't been deposited in the last 24 hours then do so now
+                    if (
+                        _lastLendingTimeDiff >= 24 hours &&
+                        IERC20(_superToken).balanceOf(address(this)) > 0
+                    ) return (true, _depositToken);
+                }
             }
         }
 
-        return false;
+        return (false, address(0));
     }
 
     /**
@@ -338,8 +357,8 @@ library dHedgeHelper {
     ) public view returns (uint256) {
         uint256 _totalShareAmount;
 
-        for (uint8 i = 0; i < _dHedgePool.tokenSet.length(); ++i) {
-            address _depositToken = _dHedgePool.tokenSet.at(i);
+        for (uint8 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
+            address _depositToken = _dHedgePool.tokenSet[i];
             _totalShareAmount += calcUserShare(
                 _dHedgePool,
                 _user,
@@ -378,31 +397,32 @@ library dHedgeHelper {
             // User's current flow rate
             uint256 _flowRate = _dHedgePool.cfa.getFlow(
                 _user,
-                _dHedgePool.superToken[_token]
+                _dHedgePool.tokenData[_token].superToken
             );
 
-            uint256 _currIndex;
+            uint256 _currIndex = _dHedgePool.tokenData[_token].currMarketIndex;
+
+            // solhint-disable-next-line not-rely-on-time
+            uint256 _lastLendingTimeDiff = block.timestamp -
+                _dHedgePool.tokenData[_token].lendingData[_currIndex][2];
+
             // Account for cooldown period if calculating amounts for withdrawal
             if (_withdraw == true) {
                 // solhint-disable-next-line not-rely-on-time
-                _currIndex = (block.timestamp -
-                    _dHedgePool.lendingData[_dHedgePool.currIndex][_token][2] >=
-                    24 hours)
-                    ? _dHedgePool.currIndex
-                    : _dHedgePool.currIndex - 1;
-            } else {
-                _currIndex = _dHedgePool.currIndex;
+                _currIndex = (_lastLendingTimeDiff >= 24 hours)
+                    ? _currIndex
+                    : _currIndex - 1;
             }
 
             // Market state at the time of user's entry
-            uint256[3] storage _prevState = _dHedgePool.lendingData[
-                _userFlow.updateIndex
-            ][_token];
+            uint256[3] storage _prevState = _dHedgePool
+                .tokenData[_token]
+                .lendingData[_userFlow.updateIndex];
 
             // Current market state
-            uint256[3] storage _currState = _dHedgePool.lendingData[_currIndex][
-                _token
-            ];
+            uint256[3] storage _currState = _dHedgePool
+                .tokenData[_token]
+                .lendingData[_currIndex];
 
             // Add the user's share amount of the market
             _shareAmount = _userFlow.calcShare(
@@ -438,12 +458,13 @@ library dHedgeHelper {
             // User's current flow rate
             uint256 _flowRate = _dHedgePool.cfa.getFlow(
                 _user,
-                _dHedgePool.superToken[_token]
+                _dHedgePool.tokenData[_token].superToken
             );
+            uint256 _currIndex = _dHedgePool.tokenData[_token].currMarketIndex;
 
             _uninvestedAmount = _userFlow.calcUserUninvested(
                 _flowRate,
-                _dHedgePool.lendingData[_dHedgePool.currIndex][_token][2]
+                _dHedgePool.tokenData[_token].lendingData[_currIndex][2]
             );
         }
 

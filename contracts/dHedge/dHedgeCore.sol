@@ -10,10 +10,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
+
 // import "hardhat/console.sol";
 
 /**
- * @title Core contract for a dHedge pool 
+ * @title Core contract for a dHedge pool
  * @author rashtrakoff
  * @notice Contains user facing functions
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
@@ -26,6 +27,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for *;
 
+    address private upkeep;
     dHedgeStorage.dHedgePool private poolData;
 
     constructor(
@@ -45,11 +47,9 @@ contract dHedgeCore is Ownable, SuperAppBase {
 
         poolData.host = _host;
         poolData.cfa = _cfa;
-        poolData.owner = msg.sender;
         poolData.poolLogic = _dHedgePool;
         poolData.bank = _bank;
         poolData.isActive = true;
-        poolData.currIndex = 1;
 
         // Providing dHedgeBank with unlimited allowance for storing LP tokens
         IERC20(_dHedgePool).safeIncreaseAllowance(_bank, type(uint256).max);
@@ -71,11 +71,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
             IERC20(_token).balanceOf(address(this))
         );
     }
-    
+
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
-    function dHedgeDeposit() external {
+    /// @param _token Address of the underlying token to be deposited into dHedge pool
+    function dHedgeDeposit(address _token) external {
         _onlyActive();
-        poolData.deposit();
+        poolData.deposit(_token);
     }
 
     /// @notice Withdraws LP tokens of the pool to the caller
@@ -111,12 +112,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         poolData.moveLPT();
     }
 
-    /// @dev Checks if deposit action can be performed
-    /// @return Boolean indicating if upkeep/deposit can be performed
-    function requireUpkeep() external view returns (bool) {
-        return poolData.requireUpkeep();
-    }
-
     /// @notice Calculates withdrawable amount. Also accounts for cooldown period.
     /// @param _user Address of the user whose withdrawable amount needs to be calculated
     /// @return Amount that can be withdrawn immediately
@@ -148,6 +143,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
         return poolData.poolLogic;
     }
 
+    /// @dev Checks if deposit action can be performed
+    /// @return Boolean indicating if upkeep/deposit can be performed
+    function requireUpkeep() public view returns (bool, address) {
+        return poolData.requireUpkeep();
+    }
+
     /// @dev Helper function that's called after agreements are created, updated or terminated
     /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
     /// @param _underlyingToken Address of the underlying token on which operations need to be performed
@@ -165,7 +166,9 @@ contract dHedgeCore is Ownable, SuperAppBase {
         ];
 
         _userFlow._updateFlowDetails(_prevUninvestedSum, _prevShareAmount);
-        _userFlow.updateIndex = poolData.currIndex;
+        _userFlow.updateIndex = poolData
+            .tokenData[_underlyingToken]
+            .currMarketIndex;
     }
 
     /// @dev Helper function that's called before agreements are created, updated or terminated
@@ -255,10 +258,13 @@ contract dHedgeCore is Ownable, SuperAppBase {
                 Unlimited approve underlying token to the dHedge pool.
             Confirm whether unlimited approve can be misused by the poolLogic contract.
         */
+        if (poolData.tokenData[_underlyingToken].superToken == address(0)) {
+            poolData.tokenSet.push(_underlyingToken);
+            poolData.tokenData[_underlyingToken].superToken = address(
+                _superToken
+            );
+            poolData.tokenData[_underlyingToken].currMarketIndex = 1;
 
-        if (!poolData.tokenSet.contains(_underlyingToken)) {
-            poolData.tokenSet.add(_underlyingToken);
-            poolData.superToken[_underlyingToken] = address(_superToken);
             IERC20(_underlyingToken).safeIncreaseAllowance(
                 poolData.poolLogic,
                 type(uint256).max

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.4;
 
 interface IdHedgeCore {
-    function dHedgeDeposit() external;
+    function dHedgeDeposit(address _depositToken) external;
 
     function checkPoolActive() external view returns (bool);
 
-    function requireUpkeep() external view returns (bool);
+    function requireUpkeep() external view returns (bool, address);
 }
 
 interface IdHedgeBank {
@@ -20,13 +20,16 @@ interface IdHedgeBank {
 }
 
 interface IdHedgeUpkeep {
-    event CoreAdded(address _dHedgeCore, uint256 _timestamp);
-    event CoreRemoved(address _dHedgeCore, uint256 _timestamp);
-    event DepositCalled(address _dHedgeCore, uint256 _timestamp);
+    event CoreAdded(address _dHedgeCore);
+    event CorePaused(address _dHedgeCore);
+    event CoreUnPaused(address _dHedgeCore);
+    event CoreRemoved(address _dHedgeCore);
+    event DepositSuccess(address _dHedgeCore, address _depositToken);
+    event DepositFailed(address _dHedgeCore, address _depositToken, bytes _error);
 
-    function callFunction(address _contract) external;
+    function performUpkeep(address _contract, address _depositToken) external;
 
-    function checker()
+    function checkUpkeep()
         external
         view
         returns (bool _canExec, bytes memory _execPayload);

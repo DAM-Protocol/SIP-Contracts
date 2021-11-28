@@ -81,7 +81,7 @@ describe("dHedgeCore Math Testing", function () {
         await dHedgeHelper.deployed();
 
         dHedgeBankFactory = await ethers.getContractFactory("dHedgeBank", admin);
-    
+
         bank = await dHedgeBankFactory.deploy();
         await bank.deployed();
 
@@ -278,7 +278,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(25));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(5));
 
@@ -296,7 +296,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(25));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(5));
 
@@ -327,7 +327,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(25));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(5));
 
@@ -407,7 +407,7 @@ describe("dHedgeCore Math Testing", function () {
 
         expect(currUninvestedUSDC).to.be.closeTo(parseUnits("120", 18), parseUnits("1", 18));
         expect(currUninvestedDAI).to.be.closeTo(parseUnits("120", 18), parseUnits("1", 18));
-        
+
 
         await sf.cfa.createFlow({
             superToken: USDCx.address,
@@ -479,7 +479,7 @@ describe("dHedgeCore Math Testing", function () {
         expect(currUninvestedDAI).to.be.closeTo(parseUnits("200", 18), parseUnits("1", 18));
     });
 
-    it("Should be able to calculate a user's share correctly (single-token)", async() => {
+    it("Should be able to calculate a user's share correctly (single-token)", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -489,11 +489,11 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await printLPBalances();
-        
+
         console.log("USDCx balance of the core before update: ", (await USDCx.balanceOf(core.address)).toString());
         await sf.cfa.updateFlow({
             superToken: USDCx.address,
@@ -503,10 +503,10 @@ describe("dHedgeCore Math Testing", function () {
         });
         console.log("USDCx balance of the core after update: ", (await USDCx.balanceOf(core.address)).toString());
         console.log("User uninvested amount after update: ", (await core.calcUserUninvested(admin.address, USDCContract.address)).toString());
-        
+
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await printLPBalances();
@@ -523,7 +523,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await printLPBalances();
@@ -540,14 +540,14 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await printLPBalances();
         console.log("USDCx balance of the core: ", (await USDCx.balanceOf(core.address)).toString());
         console.log("Current user uninvested amount: ", (await core.calcUserUninvested(admin.address, USDCContract.address)).toString());
     });
 
-    it("Should be able to calculate a user's share correctly (single-user-multi-token)", async() => {
+    it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -562,12 +562,13 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await core.calcWithdrawable(admin.address);
         await printLPBalances();
-        
+
         await sf.cfa.updateFlow({
             superToken: DAIx.address,
             sender: admin.address,
@@ -584,7 +585,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await core.calcWithdrawable(admin.address);
@@ -606,7 +608,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await core.calcWithdrawable(admin.address);
@@ -629,7 +632,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await printLPBalances();
         await core.calcWithdrawable(admin.address);
@@ -637,7 +641,7 @@ describe("dHedgeCore Math Testing", function () {
 
     });
 
-    it.only("Should be able to calculate a user's share correctly (multi-user-single-token)", async() => {
+    it("Should be able to calculate a user's share correctly (multi-user-single-token)", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -652,13 +656,13 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await core.calcWithdrawable(admin.address);
         await core.calcWithdrawable(USDCWhale.address);
         await printLPBalances();
 
-        
+
         console.log("USDCx balance of the core before updation: ", (await USDCx.balanceOf(core.address)).toString());
         await sf.cfa.updateFlow({
             superToken: USDCx.address,
@@ -677,7 +681,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await printLPBalances();
         await core.calcWithdrawable(admin.address);
@@ -701,7 +705,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
 
         await printLPBalances();
         await core.calcWithdrawable(admin.address);
@@ -725,7 +729,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(USDCContract.address);
+
         await increaseTime(getSeconds(1));
 
         await core.calcWithdrawable(admin.address);
@@ -740,23 +745,22 @@ describe("dHedgeCore Math Testing", function () {
             sf.host.batchCall,
             "Admin starting a DAI flow"
         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
-            
+
         await increaseTime(getSeconds(30));
 
         await core.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("30", 18));
 
         await increaseTime(getSeconds(5));
 
-        await core.dHedgeDeposit();
-        
+        await core.dHedgeDeposit(DAIContract.address);
+
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
-
+        await core.dHedgeDeposit(DAIContract.address);
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
 
         // await core.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("165", 18));
@@ -771,8 +775,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
-
+        await core.dHedgeDeposit(DAIContract.address);
         await increaseTime(getSeconds(5));
         await core.moveLPT();
 
@@ -791,11 +794,11 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-        
+
         await core.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("10", 18));
 
         console.log("User uninvested amount: ", (await core.calcUserUninvested(admin.address, DAIContract.address)).toString());
-        
+
         await increaseTime(getSeconds(1));
 
         await sf.cfa.createFlow({
@@ -809,8 +812,7 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
-
+        await core.dHedgeDeposit(DAIContract.address);
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
@@ -830,7 +832,7 @@ describe("dHedgeCore Math Testing", function () {
             sf.host.batchCall,
             "Admin starting a USDC flow"
         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-            
+
         await increaseTime(getSeconds(30));
 
         await core.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("30", 18));
@@ -838,8 +840,9 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(5));
 
-        await core.dHedgeDeposit();
-        
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
+
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -847,7 +850,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -869,7 +873,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(5));
         await core.moveLPT();
@@ -898,7 +903,7 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-        
+
         await core.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("10", 18));
         await core.connect(admin).withdrawUninvestedSingle(USDCContract.address, parseUnits("10", 18));
 
@@ -926,7 +931,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
         expect(await core.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -938,7 +944,7 @@ describe("dHedgeCore Math Testing", function () {
         console.log("Current LP tokens balance of core: ", (await coreToken.balanceOf(bank.address)).toString());
     });
 
-    it("Should be able to withdraw all the uninvested amount of tokens", async() => {
+    it("Should be able to withdraw all the uninvested amount of tokens", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -950,15 +956,16 @@ describe("dHedgeCore Math Testing", function () {
             sf.host.batchCall,
             "Admin starting a USDC flow"
         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-            
+
         await increaseTime(getSeconds(30));
 
         await core.connect(admin).withdrawUninvestedAll();
 
         await increaseTime(getSeconds(5));
 
-        await core.dHedgeDeposit();
-        
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
+
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -966,7 +973,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -988,7 +996,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(5));
         await core.moveLPT();
@@ -1017,7 +1026,7 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-        
+
         await core.withdrawUninvestedAll();
 
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -1041,7 +1050,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         expect(await core.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
         expect(await core.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
@@ -1053,7 +1063,7 @@ describe("dHedgeCore Math Testing", function () {
         console.log("Current LP tokens balance of bank: ", (await coreToken.balanceOf(bank.address)).toString());
     });
 
-    it("Should be able to withdraw LP tokens", async() => {
+    it("Should be able to withdraw LP tokens", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -1065,34 +1075,36 @@ describe("dHedgeCore Math Testing", function () {
             sf.host.batchCall,
             "Admin starting a USDC flow"
         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-            
+
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
-        
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
+
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.equal(constants.Zero);
-        
+
         // Mandatory for withdrawing tokens (cooldown ends)
         await increaseTime(getSeconds(1));
         await core.moveLPT();
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        
+
         expect(currLPBalanceCore).to.equal(constants.Zero);
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
 
         await core.connect(admin).dHedgeWithdraw(currLPBalanceBank.div(4));
-        
+
         expect(await coreToken.balanceOf(admin.address)).to.be.closeTo(currLPBalanceBank.div(4), parseUnits("1", 18));
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank.mul(3).div(4), parseUnits("1", 18));
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        
+
         await sf.cfa.updateFlow({
             superToken: DAIx.address,
             sender: admin.address,
@@ -1109,7 +1121,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await printLPBalances();
 
@@ -1118,7 +1131,7 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-        
+
         await core.connect(admin).dHedgeWithdraw(currLPBalanceBank.mul(3).div(4));
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank.div(4), parseUnits("1", 18));
 
@@ -1138,7 +1151,7 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-        
+
         await core.connect(admin).dHedgeWithdraw(constants.MaxUint256);
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
@@ -1160,7 +1173,8 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await core.dHedgeDeposit();
+        await core.dHedgeDeposit(DAIContract.address);
+        await core.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(1));
         await core.moveLPT();

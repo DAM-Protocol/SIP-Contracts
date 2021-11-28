@@ -18,33 +18,6 @@ interface IPoolLogic {
     /// @param price A price of the asset
     function tokenPrice() external view returns (uint256 price);
 
-    /// @notice Get fund summary of the pool
-    /// @return Name of the pool
-    /// @return Total supply of the pool
-    /// @return Total fund value of the pool
-    /// @return Address of the pool manager
-    /// @return Name of the pool manager
-    /// @return Time of the pool creation
-    /// @return True if the pool is private, false otherwise
-    /// @return Numberator of the manager fee
-    /// @return Denominator of the manager fee
-    function getFundSummary()
-        external
-        view
-        returns (
-            string memory,
-            uint256,
-            uint256,
-            address,
-            string memory,
-            uint256,
-            bool,
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        );
-
     /// @notice Pool manager logic address for a pool
     function poolManagerLogic() external view returns (address);
 
