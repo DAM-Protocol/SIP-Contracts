@@ -1,3 +1,14 @@
-# Mumbai Testnet dHedge Deployment
+# Polygon mainnet deployments
 
-`"TestUSDT": "0x7c7c9d0EDCF9505cf20D5FdA65DC11FF5921589F", "TestUSDC": "0x813c7b85c1c5261194C561DD827dE933b25aFb04", "TestWETH": "0x278e3E719A4DBcAD941079A35395D53c3aD5565b", "USDT-Aggregator": "0x92C09849638959196E976289418e5973CC96d645", "USDC-Aggregator": "0x572dDec9087154dC5dfBB1546Bb62713147e0Ab0", "ETH-Aggregator": "0x0715A7794a1dc8e42615F059dD6e406A6594651A", "Governance": "0x711625066D58eCAfD5F6D808D8e63589186b07f0", "PoolFactoryProxy": "0x30aCAA617Db983DCbD635461cA96d911DA9724c3", "PoolLogicProxy": "0xabEeba7244D26C3cD6394870d841b4D7Cb857A4D", "PoolManagerLogicProxy": "0x4Df7F0f972dB5a478abDf77C97F33A35d3f534D8", "AssetHandlerProxy": "0x1aD620567DCd4C536A5fb19484328f32B6Fb9dc1", "ERC20Guard": "0x0692e0A9ceAc3a1DDFeA3934AF25EE6f7940635F", "UniswapV2RouterGuard": "0xbF1fd1D9d56506b40c0Fa2463dc8207Ee0E98C4d"`
+--Beginning infrastructure deployment--
+
+deploying "SFHelper" (tx: 0x4f0ca49887b4841d97a2c63736f5c1193b3d8d5cd70dba8610bf1c621094705c)...: deployed at 0x18CA85221385D8a4A0Dcb8c7FE5aD1f22843349b with 749461 gas
+deploying "dHedgeHelper" (tx: 0xbdf9daff1b534f245924b67ea7e7fd6046fea38fe0f751ee58706df2569edd2e)...: deployed at 0x0D774cFd944651418ecAAE8782a7C629c6ED4Bf0 with 2664122 gas
+deploying "dHedgeStorage" (tx: 0x2a3bf03fb24a928aa5116333628b4d723c792ebd2fb57ad58dcd57d6d584c5b2)...: deployed at 0x8993e817cea5BE20cC0dc0779102Dc16484Fbce8 with 72281 gas
+deploying "dHedgeBank" (tx: 0x227fa1e7ddebb46441b9e4352284e7f8f74f5cbce42333a61db96ef5174c4aa7)...: deployed at 0xF01696558f28CB1676Fca25f3A3C16b0951366b6 with 1313694 gas
+"dHedgeUpkeepGelato" at 0x45635A02119409a25380bC05507E7a7c097F6a99
+
+--Infrastructure setup complete !--
+
+New pool (HeliosPrime): 0xeb8c324aE4a36C4418096a02D5368C700f2c41eE
+
