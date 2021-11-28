@@ -305,7 +305,7 @@ library dHedgeHelper {
         uint256 _elapsedTime = block.timestamp - _dHedgePool.lastDepositTime;
 
         // If time elapsed between two token deposits is greater than 45 minutes then skip deposits till 24 hours are elapsed
-        if (_elapsedTime <= 45 minutes || _elapsedTime >= 24 hours) {
+        if ((_elapsedTime <= 45 minutes || _elapsedTime >= 24 hours) && _dHedgePool.isActive) {
             IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
             IPoolManagerLogic _supportLogic = IPoolManagerLogic(
                 _poolLogic.poolManagerLogic()

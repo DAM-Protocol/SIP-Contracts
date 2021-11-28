@@ -45,7 +45,7 @@ const Pool5 = "0xc28b6d9cb7bda6d0db62f8ab5714c8edafe22194";
 const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
 const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
 
-describe("dHedgeUpkeep Testing", function () {
+describe("dHedgeGelatoUpkeep Testing", function () {
     const [admin] = provider.getWallets();
 
     let sf;
@@ -110,7 +110,7 @@ describe("dHedgeUpkeep Testing", function () {
     });
 
     async function deployContracts() {
-        mockCore = await deployMockContract(admin, CoreABI.abi);
+        // mockCore = await deployMockContract(admin, CoreABI.abi);
 
         dHedgeUpkeepFactory = await ethers.getContractFactory("dHedgeUpkeepGelato", admin);
         upkeep = await dHedgeUpkeepFactory.deploy();
@@ -190,34 +190,7 @@ describe("dHedgeUpkeep Testing", function () {
         ];
     }
 
-    it("Should be able to add and remove contracts", async () => {
-        await loadFixture(deployContracts);
-
-        await upkeep.addContract(core.address);
-        await upkeep.removeContract(core.address);
-    });
-
-    it("Should fail if add or remove functions are called by other users", async () => {
-        await loadFixture(deployContracts);
-
-        await expect(upkeep.connect(USDCWhale).addContract(core.address)).to.be.revertedWith("Ownable: caller is not the owner");
-
-        await upkeep.addContract(core.address);
-
-        await expect(upkeep.connect(USDCWhale).removeContract(core.address)).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
-    it("Should recognise upkeep request", async () => {
-        await loadFixture(deployContracts);
-
-        await upkeep.addContract(mockCore.address);
-
-        await mockCore.mock.requireUpkeep.returns(true);
-
-        expect((await upkeep.checker())._canExec).to.equal(true);
-    });
-
-    it.only("Should execute deposit function", async () => {
+    it("Should check and execute deposit function", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -232,18 +205,41 @@ describe("dHedgeUpkeep Testing", function () {
 
         await increaseTime(getSeconds(30));
 
-        await upkeep.addContract(core.address);
-
-        result = await upkeep.checker();
+        await upkeep.unPauseContract(core.address);
+        result = await upkeep.checkUpkeep(core.address);
 
         expect(result._canExec).to.equal(true);
-        
-        tx = await upkeep.callFunction(core.address);
-        receipt = await provider.getTransactionReceipt(tx.hash);
-        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();        
 
-        console.log("Gas used: ", receipt.gasUsed.toString());
+        tx1 = await upkeep.performUpkeep(core.address, DAIContract.address);
+        tx2 = await upkeep.performUpkeep(core.address, USDCContract.address);
+        receipt1 = await provider.getTransactionReceipt(tx1.hash);
+        receipt2 = await provider.getTransactionReceipt(tx2.hash);
+
+        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+
+        console.log("Gas used for DAI deposit: ", receipt1.gasUsed.toString());
+        console.log("Gas used for USDC deposit: ", receipt2.gasUsed.toString());
 
         expect(await coreToken.balanceOf(core.address)).to.not.equal(constants.Zero);
+
+        await upkeep.pauseContract(core.address);
+        await increaseTime(getSeconds(2));
+
+        result = await upkeep.checkUpkeep(core.address);
+
+        expect(result._canExec).to.equal(false);
+
+        await upkeep.unPauseContract(core.address);
+        result = await upkeep.checkUpkeep(core.address);
+
+        expect(result._canExec).to.equal(true);
+
+        await upkeep.performUpkeep(core.address, DAIContract.address);
+        await increaseTime(3600);
+
+        result = await upkeep.checkUpkeep(core.address);
+        
+        expect(result._canExec).to.equal(false);
+        await expect(upkeep.performUpkeep(core.address, USDCContract.address)).to.emit(upkeep, "DepositFailed");
     });
 });

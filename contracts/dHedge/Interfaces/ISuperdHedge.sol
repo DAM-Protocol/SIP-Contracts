@@ -20,16 +20,14 @@ interface IdHedgeBank {
 }
 
 interface IdHedgeUpkeep {
-    event CoreAdded(address _dHedgeCore);
     event CorePaused(address _dHedgeCore);
     event CoreUnPaused(address _dHedgeCore);
-    event CoreRemoved(address _dHedgeCore);
     event DepositSuccess(address _dHedgeCore, address _depositToken);
-    event DepositFailed(address _dHedgeCore, address _depositToken, bytes _error);
+    event DepositFailed(address _dHedgeCore, address _depositToken, bytes _err);
 
     function performUpkeep(address _contract, address _depositToken) external;
 
-    function checkUpkeep()
+    function checkUpkeep(address _contract)
         external
         view
         returns (bool _canExec, bytes memory _execPayload);

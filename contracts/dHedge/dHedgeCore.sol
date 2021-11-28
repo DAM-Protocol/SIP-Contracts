@@ -7,7 +7,6 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 import {FlowData} from "../Common/SFHelper.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
 
@@ -23,12 +22,12 @@ import "./Libraries/dHedgeStorage.sol";
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCore is Ownable, SuperAppBase {
     using SafeERC20 for IERC20;
-    using EnumerableSet for EnumerableSet.AddressSet;
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for *;
 
-    address private upkeep;
+
     dHedgeStorage.dHedgePool private poolData;
+
 
     constructor(
         ISuperfluid _host,
@@ -62,15 +61,10 @@ contract dHedgeCore is Ownable, SuperAppBase {
             : poolData.host.registerAppWithKey(_configWord, _regKey);
     }
 
-    /// @dev Function to withdraw a token in case of emergency
-    /// @param _token Address of the pool token
-    /// Remove/Modify this function after testing
-    function emergencyWithdraw(address _token) external onlyOwner {
-        IERC20(_token).safeTransfer(
-            owner(),
-            IERC20(_token).balanceOf(address(this))
-        );
-    }
+
+    /**************************************************************************
+     * Core functions
+     *************************************************************************/
 
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
@@ -100,15 +94,27 @@ contract dHedgeCore is Ownable, SuperAppBase {
         poolData.withdrawUninvestedSingle(_token, _amount);
     }
 
+    /// @dev Function to withdraw a token in case of emergency
+    /// @param _token Address of the pool token
+    /// @custom:note Remove/Modify this function after testing
+    function emergencyWithdraw(address _token) external {
+        _onlyOwner(msg.sender);
+        IERC20(_token).safeTransfer(
+            owner(),
+            IERC20(_token).balanceOf(address(this))
+        );
+    }
+
     /// @dev Deactivates a dHedgeCore contract
-    function deactivateCore() external onlyOwner {
+    function deactivateCore() external {
+        _onlyOwner(msg.sender);
         require(poolData.isActive, "dHedgeCore: Pool already inactive");
         poolData.isActive = false;
     }
 
     /// @dev Moves the LP tokens from core to bank. May be called iff keepers fail.
-    function moveLPT() external onlyOwner {
-        _onlyActive();
+    function moveLPT() external {
+        _onlyOwner(msg.sender);
         poolData.moveLPT();
     }
 
@@ -195,6 +201,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
         require(poolData.isActive, "dHedgeCore: Pool inactive");
     }
 
+    /// @dev Equivalent to onlyOwner modifier
+    function _onlyOwner(address _user) internal view {
+        require(_user == owner(), "dHedgeCore: Not the owner");
+    }
+
+    /// @dev Checks if the caller is the SF host contract
     function _onlyHost() internal view {
         require(
             msg.sender == address(poolData.host),
@@ -202,6 +214,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
         );
     }
 
+    /// @dev Checks if the agreement is of type CFA
     function _onlyCFA(address _agreementClass) internal view {
         require(
             ISuperAgreement(_agreementClass).agreementType() ==
