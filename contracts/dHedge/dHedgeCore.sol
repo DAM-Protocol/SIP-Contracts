@@ -10,8 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
 
-// import "hardhat/console.sol";
-
 /**
  * @title Core contract for a dHedge pool
  * @author rashtrakoff
@@ -25,9 +23,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for *;
 
-
     dHedgeStorage.dHedgePool private poolData;
-
 
     constructor(
         ISuperfluid _host,
@@ -61,7 +57,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
             : poolData.host.registerAppWithKey(_configWord, _regKey);
     }
 
-
     /**************************************************************************
      * Core functions
      *************************************************************************/
@@ -76,7 +71,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @notice Withdraws LP tokens of the pool to the caller
     /// @param _amount Amount of LP tokens to be withdrawn
     function dHedgeWithdraw(uint256 _amount) external {
-        _onlyActive();
         poolData.withdrawLPT(_amount);
     }
 
@@ -108,13 +102,22 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @dev Deactivates a dHedgeCore contract
     function deactivateCore() external {
         _onlyOwner(msg.sender);
-        require(poolData.isActive, "dHedgeCore: Pool already inactive");
+        _onlyActive();
+
         poolData.isActive = false;
     }
 
-    /// @dev Moves the LP tokens from core to bank. May be called iff keepers fail.
-    function moveLPT() external {
+    function reactivateCore() external {
         _onlyOwner(msg.sender);
+        require(!poolData.isActive, "dHedgeCore: Pool already active");
+
+        poolData.isActive = true;
+    }
+
+    /// @dev Moves LP tokens from core contract to bank contract
+    /// This is automatically done by the keepers when dpositing or when someone withdraws LP tokens
+    function moveLPT() external {
+        _onlyActive();
         poolData.moveLPT();
     }
 
@@ -123,6 +126,14 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @return Amount that can be withdrawn immediately
     function calcWithdrawable(address _user) external view returns (uint256) {
         return poolData.calcWithdrawable(_user);
+    }
+
+    /// @notice Calculates locked share amount of a user for a particular token
+    /// @param _user Address of the user whose locked share amount needs to be calculated
+    /// @param _token Address of the underlying token
+    /// @return LP token amount that's locked and not available for withdrawal
+    function calcUserLockedShareAmount(address _user, address _token) external view returns (uint256) {
+        return poolData.calcUserLocked(_user, _token);
     }
 
     /// @notice Calculates uninvested token amount of a particular user
@@ -164,17 +175,20 @@ contract dHedgeCore is Ownable, SuperAppBase {
         (
             address _sender,
             uint256 _prevUninvestedSum,
-            uint256 _prevShareAmount
-        ) = abi.decode(_cbdata, (address, uint256, uint256));
+            uint256 _prevShareAmount,
+            uint256 _prevLockedShareAmount
+        ) = abi.decode(_cbdata, (address, uint256, uint256, uint256));
 
-        FlowData storage _userFlow = poolData.userFlows[_sender][
-            _underlyingToken
-        ];
+        FlowData storage _userFlow = poolData
+        .userFlows[_sender][_underlyingToken].userFlow;
 
         _userFlow._updateFlowDetails(_prevUninvestedSum, _prevShareAmount);
         _userFlow.updateIndex = poolData
             .tokenData[_underlyingToken]
             .currMarketIndex;
+        poolData
+        .userFlows[_sender][_underlyingToken]
+            .lockedShareAmount = _prevLockedShareAmount;
     }
 
     /// @dev Helper function that's called before agreements are created, updated or terminated
@@ -192,7 +206,8 @@ contract dHedgeCore is Ownable, SuperAppBase {
             abi.encode(
                 _sender,
                 poolData.calcUserUninvested(_sender, _underlyingToken),
-                poolData.calcUserShare(_sender, _underlyingToken, false)
+                poolData.calcUserShare(_sender, _underlyingToken),
+                poolData.calcUserLocked(_sender, _underlyingToken)
             );
     }
 

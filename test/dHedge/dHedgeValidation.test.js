@@ -64,52 +64,53 @@ describe("dHedgeCore Math Testing", function () {
         USDCx = sf.tokens.USDCx;
         DAIx = sf.tokens.DAIx;
 
-        SFHelperFactory = await ethers.getContractFactory("SFHelper");
-        SFHelper = await SFHelperFactory.deploy();
-        await SFHelper.deployed();
+        // SFHelperFactory = await ethers.getContractFactory("SFHelper");
+        // SFHelper = await SFHelperFactory.deploy();
+        // await SFHelper.deployed();
 
-        dHedgeStorageFactory = await ethers.getContractFactory("dHedgeStorage");
-        dHedgeStorage = await dHedgeStorageFactory.deploy();
-        await dHedgeStorage.deployed();
+        // dHedgeStorageFactory = await ethers.getContractFactory("dHedgeStorage");
+        // dHedgeStorage = await dHedgeStorageFactory.deploy();
+        // await dHedgeStorage.deployed();
 
-        dHedgeHelperFactory = await ethers.getContractFactory("dHedgeHelper", {
-            libraries: {
-                SFHelper: SFHelper.address
-            }
-        });
-        dHedgeHelper = await dHedgeHelperFactory.deploy();
-        await dHedgeHelper.deployed();
+        // dHedgeHelperFactory = await ethers.getContractFactory("dHedgeHelper", {
+        //     libraries: {
+        //         SFHelper: SFHelper.address
+        //     }
+        // });
+        // dHedgeHelper = await dHedgeHelperFactory.deploy();
+        // await dHedgeHelper.deployed();
 
-        dHedgeBankFactory = await ethers.getContractFactory("dHedgeBank", admin);
+        // dHedgeBankFactory = await ethers.getContractFactory("dHedgeBank", admin);
 
-        bank = await dHedgeBankFactory.deploy();
-        await bank.deployed();
+        // bank = await dHedgeBankFactory.deploy();
+        // await bank.deployed();
 
-        AssetHandlerABI = [
-            "function setChainlinkTimeout(uint256 newTimeoutPeriod) external",
-            "function owner() external view returns (address)"
-        ];
+        // AssetHandlerABI = [
+        //     "function setChainlinkTimeout(uint256 newTimeoutPeriod) external",
+        //     "function owner() external view returns (address)"
+        // ];
 
-        AssetHandlerContract = await ethers.getContractAt(AssetHandlerABI, "0x760FE3179c8491f4b75b21A81F3eE4a5D616A28a");
-        console.log("Current AssetHandler owner: ", (await AssetHandlerContract.owner()));
-        await AssetHandlerContract.connect(AssetHandler).setChainlinkTimeout(getSeconds(500).toString());
+        // AssetHandlerContract = await ethers.getContractAt(AssetHandlerABI, "0x760FE3179c8491f4b75b21A81F3eE4a5D616A28a");
+        // console.log("Current AssetHandler owner: ", (await AssetHandlerContract.owner()));
+        // await AssetHandlerContract.connect(AssetHandler).setChainlinkTimeout(getSeconds(500).toString());
     });
 
     async function deployContracts() {
-        dHedgeCoreFactory = await ethers.getContractFactory("dHedgeCore", {
-            libraries: {
-                dHedgeHelper: dHedgeHelper.address,
-            },
-            admin
-        });
+        // dHedgeCoreFactory = await ethers.getContractFactory("dHedgeCore", {
+        //     libraries: {
+        //         dHedgeHelper: dHedgeHelper.address,
+        //     },
+        //     admin
+        // });
 
-        core = await dHedgeCoreFactory.deploy(
-            sf.host.address,
-            sf.agreements.cfa.address,
-            Pool1,
-            bank.address,
-            process.env.SF_REG_KEY
-        );
+        // core = await dHedgeCoreFactory.deploy(
+        //     sf.host.address,
+        //     sf.agreements.cfa.address,
+        //     Pool1,
+        //     bank.address,
+        //     process.env.SF_REG_KEY
+        // );
+        core = await ethers.getContractAt("dHedgeCore", "0xeb8c324aE4a36C4418096a02D5368C700f2c41eE");
 
         coreToken = await ethers.getContractAt("IERC20", Pool1);
 
@@ -122,7 +123,7 @@ describe("dHedgeCore Math Testing", function () {
 
         // coreToken = await ethers.getContractAt("IERC20", Pool2);
 
-        await core.deployed();
+        // await core.deployed();
         await fundAndApproveSuperTokens();
     }
 
@@ -175,6 +176,14 @@ describe("dHedgeCore Math Testing", function () {
             ]
         ];
     }
+
+    it.skip("Should be able to calculate withdrawable amount correctly", async() => {
+        await loadFixture(deployContracts);
+
+        result = await core.calcWithdrawable(admin.address);
+
+        console.log("Withdrawable amount: ", result.toString());
+    }); 
 
     it("Should be able to calculate uninvested amount correctly - 1", async () => {
         await loadFixture(deployContracts);
@@ -1152,8 +1161,8 @@ describe("dHedgeCore Math Testing", function () {
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
 
-        // await core.connect(admin).dHedgeWithdraw(constants.MaxUint256);
-        // expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+        await core.connect(admin).dHedgeWithdraw(constants.MaxUint256);
+        expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
         await increaseTime(getSeconds(1));
 
@@ -1181,47 +1190,5 @@ describe("dHedgeCore Math Testing", function () {
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
-    });
-
-    it.only("Should be able to withdraw LP tokens after deleting flow", async() => {
-        await loadFixture(deployContracts);
-
-        await web3tx(
-            sf.host.batchCall,
-            "Admin starting a USDC flow"
-        )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-
-        await increaseTime(getSeconds(1));
-        await core.dHedgeDeposit(USDCContract.address);
-        
-        await sf.cfa.deleteFlow({
-            superToken: USDCx.address,
-            sender: admin.address,
-            receiver: core.address,
-            by: admin.address
-        });
-        
-        console.log("USDCx balance: ", (await USDCx.balanceOf(core.address)).toString());
-
-        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        expect(await core.calcUserLockedShareAmount(admin.address, USDCContract.address)).to.be.closeTo(currLPBalanceCore,  parseUnits("1", 18));
-        expect(await core.calcWithdrawable(admin.address)).to.equal(constants.Zero);
-
-        await increaseTime(getSeconds(1));
-
-        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
-        expect(await core.calcUserLockedShareAmount(admin.address, USDCContract.address)).to.equal(constants.Zero);
-
-        await web3tx(
-            sf.host.batchCall,
-            "Admin starting a USDC flow"
-        )(createBatchCall("1000", "90", USDCx.address), { from: USDCWhale.address });
-
-        await increaseTime(getSeconds(10));
-        await core.dHedgeDeposit(USDCContract.address);
-        
-        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-        expect(await core.calcUserLockedShareAmount(admin.address, USDCContract.address)).to.be.closeTo(constants.Zero, parseUnits("0.1", 18));
     });
 });

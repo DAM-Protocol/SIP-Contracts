@@ -216,9 +216,8 @@ library dHedgeHelper {
     {
         for (uint8 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
             address _token = _dHedgePool.tokenSet[i];
-            FlowData storage _userFlow = _dHedgePool.userFlows[msg.sender][
-                _token
-            ];
+            FlowData storage _userFlow = _dHedgePool
+            .userFlows[msg.sender][_token].userFlow;
             uint256 _uninvestedAmount = calcUserUninvested(
                 _dHedgePool,
                 msg.sender,
@@ -229,7 +228,7 @@ library dHedgeHelper {
                 // Uninvested amount should be made 0 and share amount needs to be updated
                 _userFlow._updateFlowDetails(
                     0,
-                    calcUserShare(_dHedgePool, msg.sender, _token, false)
+                    calcUserShare(_dHedgePool, msg.sender, _token)
                 );
 
                 IERC20(_dHedgePool.tokenData[_token].superToken).safeTransfer(
@@ -269,12 +268,13 @@ library dHedgeHelper {
             "dHedgeHelper: Amount is greater than limit"
         );
 
-        FlowData storage _userFlow = _dHedgePool.userFlows[msg.sender][_token];
+        FlowData storage _userFlow = _dHedgePool
+        .userFlows[msg.sender][_token].userFlow;
 
         // Uninvested amount and share amount of the user needs to be updated
         _userFlow._updateFlowDetails(
             _uninvestedAmount - _amount,
-            calcUserShare(_dHedgePool, msg.sender, _token, false)
+            calcUserShare(_dHedgePool, msg.sender, _token)
         );
 
         IERC20(_dHedgePool.tokenData[_token].superToken).safeTransfer(
@@ -305,7 +305,10 @@ library dHedgeHelper {
         uint256 _elapsedTime = block.timestamp - _dHedgePool.lastDepositTime;
 
         // If time elapsed between two token deposits is greater than 45 minutes then skip deposits till 24 hours are elapsed
-        if ((_elapsedTime <= 45 minutes || _elapsedTime >= 24 hours) && _dHedgePool.isActive) {
+        if (
+            (_elapsedTime <= 45 minutes || _elapsedTime >= 24 hours) &&
+            _dHedgePool.isActive
+        ) {
             IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
             IPoolManagerLogic _supportLogic = IPoolManagerLogic(
                 _poolLogic.poolManagerLogic()
@@ -357,14 +360,11 @@ library dHedgeHelper {
     ) public view returns (uint256) {
         uint256 _totalShareAmount;
 
-        for (uint8 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
+        for (uint256 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
             address _depositToken = _dHedgePool.tokenSet[i];
-            _totalShareAmount += calcUserShare(
-                _dHedgePool,
-                _user,
-                _depositToken,
-                true
-            );
+            _totalShareAmount +=
+                calcUserShare(_dHedgePool, _user, _depositToken) -
+                calcUserLocked(_dHedgePool, _user, _depositToken);
         }
 
         // console.log("User's total withdrawable amount is: %s", _totalShareAmount - _dHedgePool.redeemData[_user]);
@@ -377,7 +377,7 @@ library dHedgeHelper {
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
      * @param _user Address of the user
      * @param _token Address of the token
-     * @param _withdraw Boolean representing if the calculation should be done with respect to withdrawal
+     * Boolean representing if the calculation should be done with respect to withdrawal
      * @return User's share amount for an invested amount of a token
      * As this function is used to update total share amount of a user when updating his/her flow, it is
      * necessary to use a boolean depicting if the calculation is being done as a part of update flow or
@@ -386,11 +386,18 @@ library dHedgeHelper {
     function calcUserShare(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _user,
-        address _token,
-        bool _withdraw
-    ) public view returns (uint256) {
+        address _token
+    )
+        public
+        view
+        returns (
+            // bool _withdraw
+            uint256
+        )
+    {
         uint256 _shareAmount;
-        FlowData storage _userFlow = _dHedgePool.userFlows[_user][_token];
+        FlowData storage _userFlow = _dHedgePool
+        .userFlows[_user][_token].userFlow;
 
         // Entry index 0 means user has never used that token to invest
         if (_userFlow.updateIndex > 0) {
@@ -401,39 +408,45 @@ library dHedgeHelper {
             );
 
             uint256 _currIndex = _dHedgePool.tokenData[_token].currMarketIndex;
+            console.log("Current index before checking - %s", _currIndex);
 
-            // solhint-disable-next-line not-rely-on-time
-            uint256 _lastLendingTimeDiff = block.timestamp -
-                _dHedgePool.tokenData[_token].lendingData[_currIndex][2];
+            // If the market has not lent after user's flow updation, return the share amount calculated previously
+            if (_userFlow.updateIndex == _currIndex)
+                _shareAmount = _userFlow.shareAmount;
+            else {
+                // Market state at the time of user's entry/updation
+                uint256[3] storage _prevState = _dHedgePool
+                    .tokenData[_token]
+                    .lendingData[_userFlow.updateIndex];
 
-            // Account for cooldown period if calculating amounts for withdrawal
-            if (_withdraw == true) {
-                // solhint-disable-next-line not-rely-on-time
-                _currIndex = (_lastLendingTimeDiff >= 24 hours)
-                    ? _currIndex
-                    : _currIndex - 1;
+                // Current market state
+                uint256[3] storage _currState = _dHedgePool
+                    .tokenData[_token]
+                    .lendingData[_currIndex];
+
+                // Add the user's share amount of the market
+                _shareAmount = _userFlow.calcShare(
+                    _token,
+                    _flowRate,
+                    _prevState[0],
+                    _currState[0],
+                    _prevState[1],
+                    _currState[1],
+                    _currState[2]
+                );
             }
 
-            // Market state at the time of user's entry
-            uint256[3] storage _prevState = _dHedgePool
-                .tokenData[_token]
-                .lendingData[_userFlow.updateIndex];
+            // uint256 _lastLendingTimeDiff = block.timestamp -
+            //     _dHedgePool.tokenData[_token].lendingData[_currIndex][2];
 
-            // Current market state
-            uint256[3] storage _currState = _dHedgePool
-                .tokenData[_token]
-                .lendingData[_currIndex];
+            // Account for cooldown period if calculating amounts for withdrawal
+            // if (_withdraw) {
+            //     _currIndex = (_lastLendingTimeDiff >= 24 hours)
+            //         ? _currIndex
+            //         : _currIndex - 1;
 
-            // Add the user's share amount of the market
-            _shareAmount = _userFlow.calcShare(
-                _token,
-                _flowRate,
-                _prevState[0],
-                _currState[0],
-                _prevState[1],
-                _currState[1],
-                _currState[2]
-            );
+            //     console.log("Current index after checking - %s", _currIndex);
+            // }
         }
 
         return _shareAmount;
@@ -452,7 +465,8 @@ library dHedgeHelper {
         address _token
     ) public view returns (uint256) {
         uint256 _uninvestedAmount;
-        FlowData storage _userFlow = _dHedgePool.userFlows[_user][_token];
+        FlowData storage _userFlow = _dHedgePool
+        .userFlows[_user][_token].userFlow;
 
         if (_userFlow.updateIndex > 0) {
             // User's current flow rate
@@ -469,6 +483,58 @@ library dHedgeHelper {
         }
 
         return _uninvestedAmount;
+    }
+
+    function calcUserLocked(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _user,
+        address _token
+    ) public view returns (uint256) {
+        FlowData storage _userFlow = _dHedgePool
+        .userFlows[_user][_token].userFlow;
+
+        uint256 _userUpdateIndex = _userFlow.updateIndex;
+        uint256 _marketIndex = _dHedgePool.tokenData[_token].currMarketIndex;
+
+        if (
+            IPoolLogic(_dHedgePool.poolLogic).getExitRemainingCooldown(
+                address(this)
+            ) ==
+            0 ||
+            block.timestamp -
+                _dHedgePool.tokenData[_token].lendingData[_marketIndex][2] >
+            24 hours
+        ) return 0;
+        else if (_userUpdateIndex >= _marketIndex)
+            return _dHedgePool.userFlows[_user][_token].lockedShareAmount;
+        else {
+            uint256 _flowRate = _dHedgePool.cfa.getFlow(
+                _user,
+                _dHedgePool.tokenData[_token].superToken
+            );
+            uint256[3] memory _currState = _dHedgePool
+                .tokenData[_token]
+                .lendingData[_marketIndex];
+            uint256[3] memory _prevState = _dHedgePool
+                .tokenData[_token]
+                .lendingData[_marketIndex - 1];
+
+            if (_marketIndex - _userUpdateIndex >= 2) {
+                console.log("Reaching here 1");
+                return
+                    ((_flowRate * (_currState[2] - _prevState[2])) *
+                        (_currState[1] - _prevState[1])) /
+                    (_currState[0] - _prevState[0]);
+            } else {
+                console.log("Reaching here 2");
+                return
+                    (_userFlow
+                        .calcUserInvestedAfterUpdate(_flowRate, _currState[2])
+                        .decimalAdjust(_token.getDecimals(), false) *
+                        (_currState[1] - _prevState[1])) /
+                    (_currState[0] - _prevState[0]);
+            }
+        }
     }
 
     /**

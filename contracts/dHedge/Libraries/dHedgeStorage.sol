@@ -27,6 +27,11 @@ library dHedgeStorage {
         mapping(uint256 => uint256[3]) lendingData;
     }
 
+    struct UserData {
+        FlowData userFlow;
+        uint256 lockedShareAmount;
+    }
+
     /**
      * @notice Data related to lending of a token.
      * @param host Superfluid host contract.
@@ -46,7 +51,7 @@ library dHedgeStorage {
         address bank;
         address[] tokenSet;
         mapping(address => TokenData) tokenData;
-        mapping(address => mapping(address => FlowData)) userFlows;
+        mapping(address => mapping(address => UserData)) userFlows;
         mapping(address => uint256) redeemData;
     }
 }

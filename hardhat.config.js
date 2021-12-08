@@ -9,8 +9,10 @@ require("solidity-coverage");
 require('hardhat-contract-sizer');
 require("hardhat-tracer");
 require("hardhat-deploy");
+require("@tenderly/hardhat-tenderly");
 require("./tasks/dHedge/CreateSIP");
-require("./tasks/dHedge/AddContract");
+require("./tasks/dHedge/PauseCore");
+require("./tasks/dHedge/DeactivateCore");
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -25,17 +27,18 @@ require("./tasks/dHedge/AddContract");
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 21772274,
+        blockNumber: 22006546,
         enabled: true
       },
       blockGasLimit: 20000000,
       gasPrice: 30000000000,
-      accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}]
+      accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
+      saveDeployments: false
     },
     polygon :{
       url: process.env.POLYGON_NODE_URL,
       blockGasLimit: 20000000,
-      gasPrice: 30000000000,
+      gasPrice: 40000000000,
       accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
     }
   },

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
 
-import {IPoolLogic} from "./Interfaces/IdHedge.sol";
 import {IdHedgeCore, IdHedgeUpkeep} from "./Interfaces/ISuperdHedge.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -33,7 +32,7 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
 
     /// @dev Unpauses a core contract from upkeep services
     /// @param _contract Address of the core contract
-    /// Unpausing and adding a contract are equivalent actions
+    /// Unpausing and adding a contract are equivalent actions in our case
     function unPauseContract(address _contract) external {
         _onlyOwner(msg.sender);
         require(
@@ -56,6 +55,7 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
         try IdHedgeCore(_contract).dHedgeDeposit(_depositToken) {
             emit DepositSuccess(_contract, _depositToken);
         } catch (bytes memory _err) {
+            // Pause the contract until the issue is manually resolved
             upkeepSet[_contract] = false;
 
             emit DepositFailed(_contract, _depositToken, _err);
@@ -86,22 +86,6 @@ contract dHedgeUpkeepGelato is Ownable, IdHedgeUpkeep {
                 console.logBytes(error);
             }
         }
-    }
-
-    /// @dev Checks if a given address is a contract or not
-    /// @param account Address of the account
-    function _isContract(address account) internal view returns (bool) {
-        // This method relies on extcodesize, which returns 0 for contracts in
-        // construction, since the code is only stored at the end of the
-        // constructor execution.
-
-        /* solhint-disable no-inline-assembly */
-        uint256 size;
-        assembly {
-            size := extcodesize(account)
-        }
-        return size > 0;
-        /* solhint-enable no-inline-assembly */
     }
 
     function _onlyOwner(address _user) internal view {

@@ -165,7 +165,7 @@ describe("dHedgeCore Stream Testing", function () {
         expect((await sf.agreements.cfa.getNetFlow(USDCx.address, core.address)).toString(), parseUnits("100", 18).div(getSeconds(30)));
     });
 
-    it.only("Should be able to update a stream", async () => {
+    it("Should be able to update a stream", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(

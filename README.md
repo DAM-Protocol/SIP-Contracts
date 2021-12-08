@@ -12,3 +12,11 @@ deploying "dHedgeBank" (tx: 0x227fa1e7ddebb46441b9e4352284e7f8f74f5cbce42333a61d
 
 New pool (HeliosPrime): 0xeb8c324aE4a36C4418096a02D5368C700f2c41eE
 
+--New Infrastructure--
+
+deploying "dHedgeHelper" (tx: 0x639a8acd31487fb27ab2c84c687a733a87bfb150b0bb6648b81002c73c93b964)...: deployed at 0xe72C5c7B84ae98C19BdC5cC9460C3f436ce5f830 with 2857761 gas
+deploying "dHedgeUpkeepGelato" (tx: 0x6e018bdc99b2c8d516b0c613b0c4b67476a44ce8ab5204f3488c10ab92c6588a)...: deployed at 0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1 with 968808 gas
+
+--New Infrastructure deployed !--
+
+New pool (Adzy's Swing Trading Fund): 0xDD3803011644CA3446cDd95abCf69aB4B3dF7108

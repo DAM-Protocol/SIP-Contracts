@@ -34,12 +34,6 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
         skipIfAlreadyDeployed: true
     });
     
-    // const dHedgeUpkeep = await deploy("dHedgeUpkeepChainlink", {
-    //     from: deployer,
-    //     log: true,
-    //     skipIfAlreadyDeployed: true
-    // });
-
     const dHedgeUpkeep = await deploy("dHedgeUpkeepGelato", {
         from: deployer,
         log: true,

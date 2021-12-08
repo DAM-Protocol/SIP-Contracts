@@ -9,7 +9,8 @@ task("CreateSIP", "Creates a SIP contract for a dHedge pool")
     .setAction(async (taskArgs) => {
         const { deploy } = deployments;
         const { deployer } = await getNamedAccounts();
-        const dHedgeHelper = await ethers.getContractAt("dHedgeHelper", "0x0D774cFd944651418ecAAE8782a7C629c6ED4Bf0");
+        const dHedgeHelper = await ethers.getContractAt("dHedgeHelper", "0xe72C5c7B84ae98C19BdC5cC9460C3f436ce5f830");
+        const dHedgeUpkeepGelato = await ethers.getContractAt("dHedgeUpkeepGelato", "0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1");
 
         const sf = new SuperfluidSDK.Framework({
             web3,
@@ -51,4 +52,9 @@ task("CreateSIP", "Creates a SIP contract for a dHedge pool")
         } catch (error) {
             console.log(`${error.message} for dHedgeCore at address ${dHedgeCore.address}`);
         }
+
+        await hre.run("PauseCore", {
+            core: dHedgeCore.address,
+            pause: false
+        });
     });

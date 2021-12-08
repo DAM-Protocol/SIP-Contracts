@@ -5,7 +5,7 @@ import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/inte
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Modified IERC20 interface
@@ -62,6 +62,12 @@ library SFHelper {
             ),
             getDecimals(_token),
             false
+        );
+
+        console.log(
+            "Total invested curr - %s, Total invested before - %s",
+            _totalInvestedCurr,
+            _totalInvestedBefore
         );
 
         // Amount of tokens invested into the market after the user updated his/her flow
