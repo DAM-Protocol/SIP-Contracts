@@ -7,9 +7,19 @@ task("DeactivateCore", "Task to deactivate or reactivate a core contract")
         const dHedgeCore = await ethers.getContractAt("dHedgeCore", taskArgs.core);
 
         try {
-            (taskArgs.deactivate) 
-            ? await dHedgeCore.deactivateCore() 
-            : await dHedgeCore.reactivateCore();
+            if(taskArgs.deactivate) {
+                await dHedgeCore.deactivateCore();
+                await hre.run("PauseCore", {
+                    core: dHedgeCore.address,
+                    pause: true
+                });
+            } else {
+                await dHedgeCore.reactivateCore();
+                await hre.run("PauseCore", {
+                    core: dHedgeCore.address,
+                    pause: false
+                });
+            }
             
             console.info(`Core contract ${(taskArgs.deactivate) ? "deactivate": "reactivate"} complete !`);
         } catch (error) {
