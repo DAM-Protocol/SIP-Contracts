@@ -27,6 +27,10 @@ library dHedgeStorage {
         mapping(uint256 => uint256[3]) lendingData;
     }
 
+    /**
+     * @param userFlow Flow details corresponding to a user and a supertoken
+     * @param lockedShareAmount Share amount locked according to dHedge cooldown requirements
+     */
     struct UserData {
         FlowData userFlow;
         uint256 lockedShareAmount;
@@ -36,10 +40,12 @@ library dHedgeStorage {
      * @notice Data related to lending of a token.
      * @param host Superfluid host contract.
      * @param cfa Superfluid constant flow agreement class address.
-     * @param isActive Status of contract representing a dHedge pool. 
-     * 
-     * @param redeemData Contains amount of LP tokens withdrawn by a user
+     * @param isActive Status of contract representing a dHedge pool.
+     * @param lastDepositTime Last time a deposit action took place in the pool. Useful to limit the time difference
+     * between deposits in order to guard against perpetual cooldown issues
+     * @param tokenData Contains data regarding a market (a token)
      * @param userFlows Details of users' flows and investments (address1 = user address, address2 = underlying token address)
+     * @param redeemData Contains amount of LP tokens withdrawn by a user
      * @param tokenSet Contains addresses of all the tokens currently supported by our contracts and the market
      */
     struct dHedgePool {

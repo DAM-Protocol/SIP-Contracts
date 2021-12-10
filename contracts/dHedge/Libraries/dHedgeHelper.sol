@@ -362,14 +362,19 @@ library dHedgeHelper {
 
         for (uint256 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
             address _depositToken = _dHedgePool.tokenSet[i];
-            _totalShareAmount +=
-                calcUserShare(_dHedgePool, _user, _depositToken) -
-                calcUserLocked(_dHedgePool, _user, _depositToken);
+            _totalShareAmount += calcUserShare(
+                _dHedgePool,
+                _user,
+                _depositToken
+            );
         }
 
         // console.log("User's total withdrawable amount is: %s", _totalShareAmount - _dHedgePool.redeemData[_user]);
 
-        return _totalShareAmount - _dHedgePool.redeemData[_user];
+        return
+            _totalShareAmount -
+            calcUserTotalLocked(_dHedgePool, _user) -
+            _dHedgePool.redeemData[_user];
     }
 
     /**
@@ -435,18 +440,6 @@ library dHedgeHelper {
                     _currState[2]
                 );
             }
-
-            // uint256 _lastLendingTimeDiff = block.timestamp -
-            //     _dHedgePool.tokenData[_token].lendingData[_currIndex][2];
-
-            // Account for cooldown period if calculating amounts for withdrawal
-            // if (_withdraw) {
-            //     _currIndex = (_lastLendingTimeDiff >= 24 hours)
-            //         ? _currIndex
-            //         : _currIndex - 1;
-
-            //     console.log("Current index after checking - %s", _currIndex);
-            // }
         }
 
         return _shareAmount;
@@ -485,6 +478,34 @@ library dHedgeHelper {
         return _uninvestedAmount;
     }
 
+    /**
+     * @dev Calculates total share amount that's locked for a user
+     * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
+     * @param _user Address of the user whose locked share amount is required
+     * @return Locked share amount
+     */
+    function calcUserTotalLocked(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _user
+    ) public view returns (uint256) {
+        uint256 _totalLocked;
+
+        for (uint8 i = 0; i < _dHedgePool.tokenSet.length; ++i) {
+            address _token = _dHedgePool.tokenSet[i];
+
+            _totalLocked += calcUserLocked(_dHedgePool, _user, _token);
+        }
+
+        return _totalLocked;
+    }
+
+    /**
+     * @dev Helper function for `calcUserTotalLocked`
+     * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
+     * @param _user Address of the user
+     * @param _token Address of an underlying token
+     * @return Share amount locked wrt an underlying token
+     */
     function calcUserLocked(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _user,

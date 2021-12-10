@@ -64,11 +64,11 @@ library SFHelper {
             false
         );
 
-        console.log(
-            "Total invested curr - %s, Total invested before - %s",
-            _totalInvestedCurr,
-            _totalInvestedBefore
-        );
+        // console.log(
+        //     "Total invested curr - %s, Total invested before - %s",
+        //     _totalInvestedCurr,
+        //     _totalInvestedBefore
+        // );
 
         // Amount of tokens invested into the market after the user updated his/her flow
         uint256 _totalIntervalInvestment = _totalInvestedCurr -

@@ -9,7 +9,7 @@ task("CreateSIP", "Creates a SIP contract for a dHedge pool")
     .setAction(async (taskArgs) => {
         const { deploy } = deployments;
         const { deployer } = await getNamedAccounts();
-        const dHedgeHelper = await ethers.getContractAt("dHedgeHelper", "0xe72C5c7B84ae98C19BdC5cC9460C3f436ce5f830");
+        const dHedgeHelper = await ethers.getContractAt("dHedgeHelper", "0x5364fBf7890f567fE81f424A7ffcCcC7df49F84F");
         const dHedgeUpkeepGelato = await ethers.getContractAt("dHedgeUpkeepGelato", "0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1");
 
         const sf = new SuperfluidSDK.Framework({

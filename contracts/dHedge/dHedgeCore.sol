@@ -130,10 +130,9 @@ contract dHedgeCore is Ownable, SuperAppBase {
 
     /// @notice Calculates locked share amount of a user for a particular token
     /// @param _user Address of the user whose locked share amount needs to be calculated
-    /// @param _token Address of the underlying token
     /// @return LP token amount that's locked and not available for withdrawal
-    function calcUserLockedShareAmount(address _user, address _token) external view returns (uint256) {
-        return poolData.calcUserLocked(_user, _token);
+    function calcUserLockedShareAmount(address _user) external view returns (uint256) {
+        return poolData.calcUserTotalLocked(_user);
     }
 
     /// @notice Calculates uninvested token amount of a particular user
