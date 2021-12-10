@@ -6,7 +6,7 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-web3");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
-require('hardhat-contract-sizer');
+require("hardhat-contract-sizer");
 require("hardhat-tracer");
 
 // You need to export an object to set up your config
@@ -15,36 +15,36 @@ require("hardhat-tracer");
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
- module.exports = {
-  solidity: "0.8.4",
-  networks: {
-    hardhat: {
-      initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
-      forking: {
-        url: process.env.POLYGON_NODE_URL,
-        blockNumber: 21170576,
-        enabled: true
-      },
-      accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}]
+module.exports = {
+    solidity: "0.8.4",
+    networks: {
+        hardhat: {
+            initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
+            forking: {
+                url: process.env.POLYGON_NODE_URL,
+                // blockNumber: 21170576,
+                enabled: true,
+            },
+            accounts: [{ privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString() }],
+        },
+        kovan: {
+            url: process.env.KOVAN_NODE_URL || "",
+            blockNumber: 28162760,
+        },
     },
-    kovan: {
-      url: process.env.KOVAN_NODE_URL || "",
-      blockNumber: 28162760
+    gasReporter: {
+        enabled: process.env.REPORT_GAS !== undefined,
+        currency: "USD",
     },
-  },
-  gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
-    currency: "USD",
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
-  },
-  contractSizer: {
-    alphaSort: true,
-    disambiguatePaths: false,
-    runOnCompile: true
-  },
-  mocha: {
-    timeout: 0
-  }
+    etherscan: {
+        apiKey: process.env.ETHERSCAN_API_KEY,
+    },
+    contractSizer: {
+        alphaSort: true,
+        disambiguatePaths: false,
+        runOnCompile: true,
+    },
+    mocha: {
+        timeout: 0,
+    },
 };
