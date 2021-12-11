@@ -27,9 +27,21 @@ module.exports = {
             },
             accounts: [{ privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString() }],
         },
+        local: {
+            url: "http://localhost:7545",
+            gas: "auto",
+            gasPrice: "auto",
+            accounts: [process.env.GANACHE_PRIVATE_KEY],
+        },
         kovan: {
             url: process.env.KOVAN_NODE_URL || "",
             blockNumber: 28162760,
+        },
+        polygon: {
+            url: process.env.POLYGON_NODE_URL,
+            gas: "auto",
+            gasPrice: "auto",
+            accounts: [process.env.PRIVATE_KEY],
         },
     },
     gasReporter: {

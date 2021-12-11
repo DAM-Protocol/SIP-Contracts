@@ -2,15 +2,15 @@
 pragma solidity ^0.8.0;
 pragma abicoder v2;
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Interfaces/IChainLinkAggregator.sol";
 
 contract DCAChainLink is Ownable {
-    IUniswapV2Router02 public immutable Uniswap;
-    IChainLinkAggregator public immutable ChainLinkAggregator;
+    IUniswapV2Router02 private Uniswap;
+    IChainLinkAggregator private ChainLinkAggregator;
     uint256 private slippage;
     bool private isactive;
     uint256 private fee;
@@ -58,11 +58,27 @@ contract DCAChainLink is Ownable {
         fee = _fee;
     }
 
+    function getRouter() public view returns (address) {
+        return address(Uniswap);
+    }
+
+    function getAggregator() public view returns (address) {
+        return address(ChainLinkAggregator);
+    }
+
+    function setRouter(address _swapRouter) public {
+        Uniswap = IUniswapV2Router02(_swapRouter);
+    }
+
+    function setAggregator(address _chainLinkAggregator) public {
+        ChainLinkAggregator = IChainLinkAggregator(_chainLinkAggregator);
+    }
+
     function updateSlippage(uint256 _slippage) external onlyOwner {
         slippage = _slippage;
     }
 
-    function updateFeetoken(uint256 _fee) external onlyOwner {
+    function updateFee(uint256 _fee) external onlyOwner {
         fee = _fee;
     }
 
