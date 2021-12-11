@@ -5,15 +5,14 @@ pragma abicoder v2;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-// import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import "./Interfaces/IChainLinkAggregator.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./Interfaces/IChainLinkAggregator.sol";
 
 contract DCAChainLink is Ownable {
     IUniswapV2Router02 public immutable Uniswap;
     IChainLinkAggregator public immutable ChainLinkAggregator;
     uint256 private slippage;
-    bool isactive;
+    bool private isactive;
     uint256 private fee;
 
     struct Task {
@@ -40,17 +39,20 @@ contract DCAChainLink is Ownable {
     );
     event DeleteTask(uint256 id);
 
+    event TaskExecuted(uint256 id, uint64 count, uint64 lastExecuted);
+
+    event Log(string message);
+
     Task[] private tasks;
     uint256[] private deletedtasks;
 
     constructor(
         address _swapRouter,
-        address _ChainLinkAggregator,
-        address _feeToken,
+        address _chainLinkAggregator,
         uint256 _fee
     ) {
         Uniswap = IUniswapV2Router02(_swapRouter);
-        ChainLinkAggregator = IChainLinkAggregator(_ChainLinkAggregator);
+        ChainLinkAggregator = IChainLinkAggregator(_chainLinkAggregator);
         slippage = 3;
         isactive = true;
         fee = _fee;
@@ -198,16 +200,23 @@ contract DCAChainLink is Ownable {
 
         // console.log("minOut", minOut);
 
-        Uniswap.swapExactTokensForTokens(
-            task.amount,
-            minOut,
-            path,
-            task.owner,
-            block.timestamp
-        );
+        try
+            Uniswap.swapExactTokensForTokens(
+                task.amount,
+                minOut,
+                path,
+                task.owner,
+                block.timestamp
+            )
+        {
+            //nothing to do here
+        } catch Error(string memory error) {
+            emit Log(error);
+        }
 
         if (task.count == task.intervals) {
             deleteTask(taskid);
         }
+        emit TaskExecuted(taskid, task.count + 1, uint64(block.timestamp));
     }
 }

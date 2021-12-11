@@ -85,7 +85,7 @@ describe("DCA Testing", () => {
         await cla.deployed();
 
         const DCA = await ethers.getContractFactory("DCAChainLink");
-        dca = await DCA.deploy(uniswap_address, cla.address, LINK.address, "10000000000000000");
+        dca = await DCA.deploy(uniswap_address, cla.address, "10000000000000000");
         await dca.deployed();
 
         cla.addOracle(USDT.address, "0x0A6513e40db6EB1b165753AD52E80663aeA50545"); // usdt-usd oracle
@@ -125,7 +125,7 @@ describe("DCA Testing", () => {
         await WETHContract.approve(dca.address, "1000000000000000000000000000");
         await WMATICContract.approve(dca.address, "1000000000000000000000000000");
         // USDCContract.approve(dca.address, "1000000000000000000000000000");
-        let newTaskTx = await dca.newTask(WMATIC.address, USDC.address, "1000000000000000000", 20, 7, { value: "1000000000000000000" });
+        let newTaskTx = await dca.newTask(LINK.address, USDC.address, "1000000000000000000", 20, 7, { value: "1000000000000000000" });
         await newTaskTx.wait();
         // console.log(await dca.checkTask(0));
         // console.log(await USDCContract.balanceOf(admin.address));
