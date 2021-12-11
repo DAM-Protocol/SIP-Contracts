@@ -62,9 +62,9 @@ library dHedgeHelper {
         // Time difference between last deposit transaction and now
         uint256 _elapsedTime = block.timestamp - _dHedgePool.lastDepositTime;
 
-        // If time elapsed between two token deposits is greater than 45 minutes then skip deposits till 24 hours are elapsed
+        // If time elapsed between two token deposits is greater than 15 minutes then skip deposits till 24 hours are elapsed
         require(
-            _elapsedTime <= 45 minutes || _elapsedTime >= 24 hours,
+            _elapsedTime <= 15 minutes || _elapsedTime >= 24 hours,
             "dHedgeHelper: Time difference exceeds limit"
         );
 
@@ -413,7 +413,7 @@ library dHedgeHelper {
             );
 
             uint256 _currIndex = _dHedgePool.tokenData[_token].currMarketIndex;
-            console.log("Current index before checking - %s", _currIndex);
+            // console.log("Current index before checking - %s", _currIndex);
 
             // If the market has not lent after user's flow updation, return the share amount calculated previously
             if (_userFlow.updateIndex == _currIndex)
@@ -526,7 +526,7 @@ library dHedgeHelper {
                 _dHedgePool.tokenData[_token].lendingData[_marketIndex][2] >
             24 hours
         ) return 0;
-        else if (_userUpdateIndex >= _marketIndex)
+        else if (_userUpdateIndex == _marketIndex)
             return _dHedgePool.userFlows[_user][_token].lockedShareAmount;
         else {
             uint256 _flowRate = _dHedgePool.cfa.getFlow(
@@ -540,20 +540,23 @@ library dHedgeHelper {
                 .tokenData[_token]
                 .lendingData[_marketIndex - 1];
 
+            uint256 _totalIntervalInvestment = _currState[0] - _prevState[0];
+            uint256 _totalIntervalReceived = _currState[1] - _prevState[1];
+
             if (_marketIndex - _userUpdateIndex >= 2) {
                 console.log("Reaching here 1");
                 return
-                    ((_flowRate * (_currState[2] - _prevState[2])) *
-                        (_currState[1] - _prevState[1])) /
-                    (_currState[0] - _prevState[0]);
+                    ((
+                        (_flowRate * (_currState[2] - _prevState[2]))
+                            .decimalAdjust(_token.getDecimals(), false)
+                    ) * _totalIntervalReceived) / _totalIntervalInvestment;
             } else {
                 console.log("Reaching here 2");
                 return
                     (_userFlow
                         .calcUserInvestedAfterUpdate(_flowRate, _currState[2])
                         .decimalAdjust(_token.getDecimals(), false) *
-                        (_currState[1] - _prevState[1])) /
-                    (_currState[0] - _prevState[0]);
+                        _totalIntervalReceived) / _totalIntervalInvestment;
             }
         }
     }

@@ -1063,7 +1063,7 @@ describe("dHedgeCore Math Testing", function () {
         console.log("Current LP tokens balance of bank: ", (await coreToken.balanceOf(bank.address)).toString());
     });
 
-    it("Should be able to withdraw LP tokens", async () => {
+    it.skip("Should be able to withdraw LP tokens", async () => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -1183,7 +1183,7 @@ describe("dHedgeCore Math Testing", function () {
         console.log("Withdrawable amount left: ", (await core.calcWithdrawable(admin.address)).toString());
     });
 
-    it.only("Should be able to withdraw LP tokens after deleting flow", async() => {
+    it.only("Should calculate LP share amount correctly", async() => {
         await loadFixture(deployContracts);
 
         await web3tx(
@@ -1200,6 +1200,40 @@ describe("dHedgeCore Math Testing", function () {
         await core.dHedgeDeposit(USDCContract.address);
         await core.dHedgeDeposit(DAIContract.address);
 
+        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+        expect(await core.calcWithdrawable(admin.address)).to.equal(constants.Zero);
+
+        await increaseTime(getSeconds(1));
+        await core.dHedgeDeposit(USDCContract.address);
+        await core.dHedgeDeposit(DAIContract.address);
+
+        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+        expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
+        expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
+
+        await sf.cfa.updateFlow({
+            superToken: USDCx.address,
+            sender: admin.address,
+            receiver: core.address,
+            flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
+        });
+
+        await sf.cfa.updateFlow({
+            superToken: DAIx.address,
+            sender: admin.address,
+            receiver: core.address,
+            flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
+        });
+
+        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+        expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
+        expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
+        
+        await increaseTime(getSeconds(1));
+
+        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank.add(currLPBalanceCore), parseUnits("1", 18));
+        expect(await core.calcUserLockedShareAmount(admin.address)).to.equal(constants.Zero);
+
         await sf.cfa.deleteFlow({
             superToken: USDCx.address,
             sender: admin.address,
@@ -1215,26 +1249,7 @@ describe("dHedgeCore Math Testing", function () {
         });
         
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore,  parseUnits("1", 18));
-        expect(await core.calcWithdrawable(admin.address)).to.equal(constants.Zero);
-
-        await increaseTime(getSeconds(1));
-
-        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
-        expect(await core.calcUserLockedShareAmount(admin.address)).to.equal(constants.Zero);
-
-        await web3tx(
-            sf.host.batchCall,
-            "Admin starting a USDC flow"
-        )(createBatchCall("1000", "90", USDCx.address), { from: USDCWhale.address });
-
-        await increaseTime(getSeconds(10));
-        await core.dHedgeDeposit(USDCContract.address);
-        await core.dHedgeDeposit(DAIContract.address);
-        
-        [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
+        expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank.add(currLPBalanceCore), parseUnits("1", 18));
         expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(constants.Zero, parseUnits("0.1", 18));
-        
     });
 });
