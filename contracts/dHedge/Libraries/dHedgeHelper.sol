@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 /**
  * @title dHedge helper library
@@ -526,9 +526,10 @@ library dHedgeHelper {
                 _dHedgePool.tokenData[_token].lendingData[_marketIndex][2] >
             24 hours
         ) return 0;
-        else if (_userUpdateIndex == _marketIndex)
+        else if (_userUpdateIndex == _marketIndex) {
             return _dHedgePool.userFlows[_user][_token].lockedShareAmount;
-        else {
+
+        } else {
             uint256 _flowRate = _dHedgePool.cfa.getFlow(
                 _user,
                 _dHedgePool.tokenData[_token].superToken
@@ -544,14 +545,12 @@ library dHedgeHelper {
             uint256 _totalIntervalReceived = _currState[1] - _prevState[1];
 
             if (_marketIndex - _userUpdateIndex >= 2) {
-                console.log("Reaching here 1");
                 return
                     ((
                         (_flowRate * (_currState[2] - _prevState[2]))
                             .decimalAdjust(_token.getDecimals(), false)
                     ) * _totalIntervalReceived) / _totalIntervalInvestment;
             } else {
-                console.log("Reaching here 2");
                 return
                     (_userFlow
                         .calcUserInvestedAfterUpdate(_flowRate, _currState[2])

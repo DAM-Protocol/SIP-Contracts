@@ -1189,27 +1189,33 @@ describe("dHedgeCore Math Testing", function () {
         await web3tx(
             sf.host.batchCall,
             "Admin starting a USDC flow"
-        )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
+        )(createBatchCall("1000", "30", USDCx.address), { from: admin.address });
 
-        await web3tx(
-            sf.host.batchCall,
-            "Admin starting a DAI flow"
-        )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
+        // await web3tx(
+        //     sf.host.batchCall,
+        //     "Admin starting a DAI flow"
+        // )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
 
         await increaseTime(getSeconds(1));
         await core.dHedgeDeposit(USDCContract.address);
-        await core.dHedgeDeposit(DAIContract.address);
+        // await core.dHedgeDeposit(DAIContract.address);
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcWithdrawable(admin.address)).to.equal(constants.Zero);
+        
+        await increaseTime(60*60*2);
+        console.log("Withdrawable: ", (await core.calcWithdrawable(admin.address)).toString());
 
         await increaseTime(getSeconds(1));
         await core.dHedgeDeposit(USDCContract.address);
-        await core.dHedgeDeposit(DAIContract.address);
+        // await core.dHedgeDeposit(DAIContract.address);
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
         expect(await core.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
+
+        await increaseTime(60*60*2);
+        console.log("Withdrawable: ", (await core.calcWithdrawable(admin.address)).toString());
 
         await sf.cfa.updateFlow({
             superToken: USDCx.address,
@@ -1218,12 +1224,12 @@ describe("dHedgeCore Math Testing", function () {
             flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
         });
 
-        await sf.cfa.updateFlow({
-            superToken: DAIx.address,
-            sender: admin.address,
-            receiver: core.address,
-            flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
-        });
+        // await sf.cfa.updateFlow({
+        //     superToken: DAIx.address,
+        //     sender: admin.address,
+        //     receiver: core.address,
+        //     flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
+        // });
 
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect(await core.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
@@ -1241,12 +1247,12 @@ describe("dHedgeCore Math Testing", function () {
             by: admin.address
         });
 
-        await sf.cfa.deleteFlow({
-            superToken: DAIx.address,
-            sender: admin.address,
-            receiver: core.address,
-            by: admin.address
-        });
+        // await sf.cfa.deleteFlow({
+        //     superToken: DAIx.address,
+        //     sender: admin.address,
+        //     receiver: core.address,
+        //     by: admin.address
+        // });
         
         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
         expect((await core.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank.add(currLPBalanceCore), parseUnits("1", 18));

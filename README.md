@@ -9,4 +9,4 @@ reusing "dHedgeUpkeepGelato" at 0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1
 
 --Latest Pools--
 
-dHedge stable coin yield: 0xc1377c38B74582245A7d1323148D01EBc11550ec
+dHedge stable coin yield: 0xC05B38Dd7D1bc0E65b2EE5dF19AC4296B382Cb10

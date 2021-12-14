@@ -16,7 +16,7 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
             SFHelper: SFHelper.address
         },
         log: true,
-        skipIfAlreadyDeployed: true
+        skipIfAlreadyDeployed: false
     });
 
     const dHedgeStorage = await deploy("dHedgeStorage", {
