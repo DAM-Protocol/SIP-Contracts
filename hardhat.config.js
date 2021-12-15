@@ -1,4 +1,5 @@
 const { parseUnits } = require("ethers/lib/utils");
+require("@nomiclabs/hardhat-etherscan");
 
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
