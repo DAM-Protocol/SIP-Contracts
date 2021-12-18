@@ -1,42 +1,12 @@
-# Advanced Sample Hardhat Project
+# Polygon mainnet deployments
 
-This project demonstrates an advanced Hardhat use case, integrating other tools commonly used alongside Hardhat in the ecosystem.
+--Latest Infrastructure--
+reusing "SFHelper" at 0x18CA85221385D8a4A0Dcb8c7FE5aD1f22843349b
+deploying "dHedgeHelper" (tx: 0xf60a307889f2a4795015519adc99a7643662b23c9a4dba182c4ecd4104b89527)...: deployed at 0x5364fBf7890f567fE81f424A7ffcCcC7df49F84F with 3607369 gas
+deploying "dHedgeStorage" (tx: 0x1cb50b2837f118635bb34cf6675a7a9c65bea5a8554ec53484ff87ad2910781f)...: deployed at 0x0528029C92dB92c466c3fd7bDff7cd0f25126829 with 72281 gas
+reusing "dHedgeBank" at 0xF01696558f28CB1676Fca25f3A3C16b0951366b6
+reusing "dHedgeUpkeepGelato" at 0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1
 
-The project comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts. It also comes with a variety of other tools, preconfigured to work with the project code.
+--Latest Pools--
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-npx hardhat help
-REPORT_GAS=true npx hardhat test
-npx hardhat coverage
-npx hardhat run scripts/deploy.js
-node scripts/deploy.js
-npx eslint '**/*.js'
-npx eslint '**/*.js' --fix
-npx prettier '**/*.{json,sol,md}' --check
-npx prettier '**/*.{json,sol,md}' --write
-npx solhint 'contracts/**/*.sol'
-npx solhint 'contracts/**/*.sol' --fix
-```
-
-# Etherscan verification
-
-To try out Etherscan verification, you first need to deploy a contract to an Ethereum network that's supported by Etherscan, such as Ropsten.
-
-In this project, copy the .env.example file to a file named .env, and then edit it to fill in the details. Enter your Etherscan API key, your Ropsten node URL (eg from Alchemy), and the private key of the account which will send the deployment transaction. With a valid .env file in place, first deploy your contract:
-
-```shell
-hardhat run --network ropsten scripts/deploy.js
-```
-
-Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
-
-```shell
-npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
-```
+dHedge stable coin yield: 0xC05B38Dd7D1bc0E65b2EE5dF19AC4296B382Cb10
