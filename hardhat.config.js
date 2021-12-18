@@ -1,4 +1,5 @@
 const { parseUnits } = require("ethers/lib/utils");
+require("@nomiclabs/hardhat-etherscan");
 
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
@@ -6,7 +7,7 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-web3");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
-require('hardhat-contract-sizer');
+require("hardhat-contract-sizer");
 require("hardhat-tracer");
 require("hardhat-deploy");
 require("@tenderly/hardhat-tenderly");
