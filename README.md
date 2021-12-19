@@ -18,7 +18,7 @@ We plan to upgrade/modify contracts to support Superfluid IDA (Instant Distribut
 &nbsp;
 
 <p align="center">
-    <img src="misc/images/Auto%20DCA.png" alt="Tech used in Super D HEDGE" width="300" height="200"/>
+    <img src="misc/images/Super%20dHEDGE.png" alt="Tech used in Super D HEDGE" width="300" height="200"/>
 </p>
 
 &nbsp;
@@ -64,7 +64,7 @@ This product allows a user to create custom DCA task. This custom task is then m
 ### Auto DCA
 
 <p align="center">
-    :construction: **Section under construction**
+    :construction: <strong>Section under construction</strong>
 </p>
 
 &nbsp;
