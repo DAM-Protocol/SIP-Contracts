@@ -39,8 +39,6 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 ### Super dHEDGE
 
----
-
 #### :office: Infrastructure (Core and Helper Contracts)
 
 | Contract Name | Address |
@@ -63,9 +61,10 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 ### Auto DCA
 
-<p align="center">
-    :construction: <strong>Section under construction</strong>
-</p>
+| Contract Name | Address |
+| ------------- | ------- |
+| [ChainLinkAggregator](https://polygonscan.com/address/0x2B76a4Fa993f30004B4e92caB6256F98d0612ae5#code) | 0x2B76a4Fa993f30004B4e92caB6256F98d0612ae5 |
+| [DCAChainLink](https://polygonscan.com/address/0x88df2C46e0e7D9185054e01965Dabf89e236Ae92#code) | 0x88df2C46e0e7D9185054e01965Dabf89e236Ae92 |
 
 &nbsp;
 
