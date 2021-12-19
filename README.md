@@ -17,7 +17,9 @@ We plan to upgrade/modify contracts to support Superfluid IDA (Instant Distribut
 
 &nbsp;
 
-<img src="misc/images/Super%20dHEDGE.png" alt="Tech used in Super D HEDGE" style="height: 200px; width: 300px; display: block; margin: 0 auto;"/>
+<p align="center">
+    <img src="misc/images/Auto%20DCA.png" alt="Tech used in Super D HEDGE" width="300" height="200"/>
+</p>
 
 &nbsp;
 
@@ -27,7 +29,9 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 &nbsp;
 
-<img src="misc/images/Auto%20DCA.png" alt="Tech used in Auto Dollar Cost Averaging" style="height: 200px; width: 300px; display: block; margin: 0 auto;"/>
+<p align="center">
+    <img src="misc/images/Auto%20DCA.png" alt="Tech used in Auto Dollar Cost Averaging" width="300" height="200"/>
+</p>
 
 &nbsp;
 
@@ -59,11 +63,9 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 ### Auto DCA
 
-<div style="text-align: center;">
-
-:construction: **Section under construction**
-
-</div>
+<p align="center">
+    :construction: **Section under construction**
+</p>
 
 &nbsp;
 
