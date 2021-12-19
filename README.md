@@ -4,12 +4,6 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 &nbsp;
 
-<p align="center">
-    <img src="misc/images/Auto%20DCA.png" alt="Tech used in Auto Dollar Cost Averaging" width="300" height="200"/>
-</p>
-
-&nbsp;
-
 ## :building_construction: Deployments
 
 | Contract Name | Address |
