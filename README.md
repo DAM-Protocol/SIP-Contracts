@@ -1,12 +1,25 @@
-# Polygon mainnet deployments
+# :robot: Auto Dollar Cost Averaging
 
---Latest Infrastructure--
-reusing "SFHelper" at 0x18CA85221385D8a4A0Dcb8c7FE5aD1f22843349b
-deploying "dHedgeHelper" (tx: 0xf60a307889f2a4795015519adc99a7643662b23c9a4dba182c4ecd4104b89527)...: deployed at 0x5364fBf7890f567fE81f424A7ffcCcC7df49F84F with 3607369 gas
-deploying "dHedgeStorage" (tx: 0x1cb50b2837f118635bb34cf6675a7a9c65bea5a8554ec53484ff87ad2910781f)...: deployed at 0x0528029C92dB92c466c3fd7bDff7cd0f25126829 with 72281 gas
-reusing "dHedgeBank" at 0xF01696558f28CB1676Fca25f3A3C16b0951366b6
-reusing "dHedgeUpkeepGelato" at 0xa78C29cFbabe6829Cbf645DB532a9e597254F5C1
+This product allows a user to create custom DCA task. This custom task is then monitored by Chainlink Keepers' and executed as per the parameters set by the user during task creation. Gas fees are taken upfront from the user for the entire duration of the task (in MATIC).
 
---Latest Pools--
+&nbsp;
 
-dHedge stable coin yield: 0xC05B38Dd7D1bc0E65b2EE5dF19AC4296B382Cb10
+<p align="center">
+    <img src="misc/images/Auto%20DCA.png" alt="Tech used in Auto Dollar Cost Averaging" width="300" height="200"/>
+</p>
+
+&nbsp;
+
+## :building_construction: Deployments
+
+| Contract Name | Address |
+| ------------- | ------- |
+| [ChainLinkAggregator](https://polygonscan.com/address/0x2B76a4Fa993f30004B4e92caB6256F98d0612ae5#code) | 0x2B76a4Fa993f30004B4e92caB6256F98d0612ae5 |
+| [DCAChainLink](https://polygonscan.com/address/0x88df2C46e0e7D9185054e01965Dabf89e236Ae92#code) | 0x88df2C46e0e7D9185054e01965Dabf89e236Ae92 |
+
+&nbsp;
+
+## :man_technologist: Technology
+
+1. [Sushiswap](https://sushi.com/) - Swap, earn, stack yields, lend, borrow, leverage all on one decentralized, community driven platform.
+2. [Chainlink](https://chain.link/) - Keepers network and oracles used for automating a user's DCA task and ensuring best prices respectively.
