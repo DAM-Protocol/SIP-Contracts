@@ -6,7 +6,6 @@ There aren't many DeFi projects which allow for, what we call in TradFi, Systema
 
 ## dHEDGE :handshake: Superfluid (Super dHEDGE)
 
----
 
 ​dHEDGE is a one-stop location for managing investment activities on-chain where you can put your capital to work in different strategies based on a transparent track record.
 
@@ -24,8 +23,6 @@ We plan to upgrade/modify contracts to support Superfluid IDA (Instant Distribut
 
 ## :robot: Auto Dollar Cost Averaging
 
----
-
 This product allows a user to create custom DCA task. This custom task is then monitored by Chainlink Keepers' and executed as per the parameters set by the user during task creation. Gas fees are taken upfront from the user for the entire duration of the task (in MATIC).
 
 &nbsp;
@@ -36,11 +33,11 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 ## :building_construction: Deployments
 
----
-
 ### Super dHEDGE
 
-:office: Infrastructure (Core and Helper Contracts)
+---
+
+#### :office: Infrastructure (Core and Helper Contracts)
 
 | Contract Name | Address |
 | ------------- | ------- |
@@ -52,7 +49,7 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 &nbsp;
 
-:money_with_wings: Active Super dHEDGE Pools
+#### :money_with_wings: Active Super dHEDGE Pools
 
 | Pool Name | dHEDGE Pool Address | Super dHEDGE Address |
 | --------- | ------------------- | -------------------- |
@@ -62,21 +59,23 @@ This product allows a user to create custom DCA task. This custom task is then m
 
 ### Auto DCA
 
+<div style="text-align: center;">
+
 :construction: **Section under construction**
+
+</div>
 
 &nbsp;
 
 ## :man_technologist: Technology
 
----
-
-- Super dHEDGE
+- **Super dHEDGE**
 
 1. [dHEDGE](https://www.dhedge.org/) - Discover top performing DeFi strategies.
 2. [Superfluid](https://www.superfluid.finance/home) - Allows for subscribing to a particular dHEDGE pool/fund.
 3. [Gelato](https://www.gelato.network/) - Used to automate deposits to dHEDGE pools/funds.
 
-- Auto DCA
+- **Auto DCA**
 
 1. [Sushiswap](https://sushi.com/) - Swap, earn, stack yields, lend, borrow, leverage all on one decentralized, community driven platform.
 2. [Chainlink](https://chain.link/) - Keepers network and oracles used for automating a user's DCA task and ensuring best prices respectively.
