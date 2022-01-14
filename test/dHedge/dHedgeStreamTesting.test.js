@@ -2,8 +2,7 @@ const { expect } = require("chai");
 const { ethers, waffle } = require("hardhat");
 const { provider, loadFixture } = waffle;
 const { parseUnits } = require("@ethersproject/units");
-const SuperfluidSDK = require("@superfluid-finance/js-sdk");
-const { web3tx } = require("@decentral.ee/web3-helpers");
+const SuperfluidSDK = require("@superfluid-finance/sdk-core");
 const {
     getBigNumber,
     getTimeStamp,
@@ -12,57 +11,80 @@ const {
     getSeconds,
     increaseTime,
     setNextBlockTimestamp,
-    convertTo,
-    convertFrom,
     impersonateAccounts
 } = require("../../helpers/helpers");
-
-const DAI = {
-    token: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
-    decimals: 18
-}
-
-const USDC = {
-    token: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-    decimals: 6
-}
-
-// Convex strategies pool (https://app.dhedge.org/pool/0xb232f192041a121f094c669220dc9573ab18163f)
-// Supports DAI, SUSHI, USDC, USDT, WBTC, WETH and WMATIC
-const Pool1 = "0xb232f192041a121f094c669220dc9573ab18163f";
-
-// 3313.fi_poly pool (https://app.dhedge.org/pool/0xf5fa47d9ca6269d85965eaa5af78a35b2ce016d4)
-// Supports USDC only
-const Pool2 = "0xf5fa47d9ca6269d85965eaa5af78a35b2ce016d4";
-
-const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
-const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
+const { defaultAbiCoder, keccak256 } = require("ethers/lib/utils");
+const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
+const SuperfluidTokenFactory = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperTokenFactoryBase.json");
+const { constants } = require("ethers");
 
 describe("dHedgeCore Stream Testing", function () {
-    const [admin] = provider.getWallets();
+    const DAI = {
+        token: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+        superToken: "0x1305f6b6df9dc47159d12eb7ac2804d4a33173c2",
+        decimals: 18
+    }
+    const USDC = {
+        token: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        superToken: "0xcaa7349cea390f89641fe306d93591f87595dc1f",
+        decimals: 6
+    }
+    const SFConfig = {
+        hostAddress: "0x3E14dC1b13c488a8d5D310918780c983bD5982E7",
+        CFAv1: "0x6EeE6060f715257b970700bc2656De21dEdF074C",
+        IDAv1: "0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1"
+    }
+    
+    const hostABI = [
+        "function getGovernance() external view returns (address)",
+        "function getSuperTokenFactory() external view returns(address)"
+    ];
 
-    let sf;
-    let USDCWhale, DAIWhale;
-    let DAIContract, USDCContract, Pool1Token, Pool2Token;
-    let USDCx, DAIx;
+    const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
+    const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
+    const DAIWhaleAddr2 = "0x4A35582a710E1F4b2030A3F826DA20BfB6703C09";
+    
+    // dHEDGE Stablecoin Yield (https://app.dhedge.org/pool/0xbae28251b2a4e621aa7e20538c06dee010bc06de)
+    // Supports DAI and USDC
+    const Pool1 = "0xbae28251b2a4e621aa7e20538c06dee010bc06de";
+    
+    // SNX Debt Mirror (https://app.dhedge.org/pool/0x65bb99e80a863e0e27ee6d09c794ed8c0be47186)
+    // Supports USDC only
+    const Pool2 = "0x65bb99e80a863e0e27ee6d09c794ed8c0be47186";
+    
+    const [admin] = provider.getWallets();
+    const ethersProvider = provider;
+    
+    let sf, host;
+    let USDCWhale, DAIWhale, DAIWhale2;
+    let DAIContract, USDCContract;
+    let USDCx, DAIx, DHPTx;
     let dHedgeHelper, dHedgeStorage, SFHelper;
-    let core, coreToken;
+    let core, DHPT;
 
     before(async () => {
-        [USDCWhale, DAIWhale] = await impersonateAccounts([USDCWhaleAddr, DAIWhaleAddr]);
+        [USDCWhale, DAIWhale, DAIWhale2] = await impersonateAccounts([USDCWhaleAddr, DAIWhaleAddr, DAIWhaleAddr2]);
         DAIContract = await ethers.getContractAt("IERC20", DAI.token);
         USDCContract = await ethers.getContractAt("IERC20", USDC.token);
 
-        sf = new SuperfluidSDK.Framework({
-            web3,
-            version: "v1",
-            tokens: ["USDC", "DAI"]
+        sf = await SuperfluidSDK.Framework.create({
+            networkName: "hardhat",
+            dataMode: "WEB3_ONLY",
+            resolverAddress: "0xE0cc76334405EE8b39213E620587d815967af39C", // Polygon mainnet resolver
+            protocolReleaseVersion: "v1",
+            provider: ethersProvider
         });
+        
+        host = await ethers.getContractAt(hostABI, SFConfig.hostAddress);
+        
+        USDCx = await sf.loadSuperToken(USDC.superToken);
+        DAIx = await sf.loadSuperToken(DAI.superToken);
 
-        await sf.initialize();
-
-        USDCx = sf.tokens.USDCx;
-        DAIx = sf.tokens.DAIx;
+        DHPTxAddr = await createSuperToken(Pool1);
+        DHPTx = await ethers.getContractAt("IERC20", DHPTxAddr);
+        DHPT = await ethers.getContractAt("IERC20", Pool1);
+        
+        console.log("Supertoken created for pool");
 
         SFHelperFactory = await ethers.getContractFactory("SFHelper");
         SFHelper = await SFHelperFactory.deploy();
@@ -79,155 +101,154 @@ describe("dHedgeCore Stream Testing", function () {
         });
         dHedgeHelper = await dHedgeHelperFactory.deploy();
         await dHedgeHelper.deployed();
+
     });
 
     async function deployContracts() {
+        regKey = await createSFRegistrationKey(admin.address);
         dHedgeCoreFactory = await ethers.getContractFactory("dHedgeCore", {
             libraries: {
+                SFHelper: SFHelper.address,
                 dHedgeHelper: dHedgeHelper.address,
             },
             admin
         });
 
         core = await dHedgeCoreFactory.deploy(
-            sf.host.address,
-            sf.agreements.cfa.address,
             Pool1,
-            process.env.SF_REG_KEY
+            DHPTx.address,
+            "20000",
+            regKey
+        );
+        
+        await core.deployed();
+
+        await core.addSuperTokenAndIndex(USDC.superToken);
+        await core.addSuperTokenAndIndex(DAI.superToken);
+
+        await USDCContract.connect(USDCWhale).approve(USDC.superToken, parseUnits("1000000", 6));
+        await DAIContract.connect(DAIWhale).approve(DAI.superToken, parseUnits("1000000", 18));
+        await DAIContract.connect(DAIWhale2).approve(DAI.superToken, parseUnits("1000000", 18));
+
+        await USDCx.upgrade({ amount: parseUnits("1000", 18) }).exec(USDCWhale);
+        await DAIx.upgrade({ amount: parseUnits("1000", 18) }).exec(DAIWhale);
+        await DAIx.upgrade({ amount: parseUnits("1000", 18) }).exec(DAIWhale2);
+
+        console.log("Contracts deployed !");
+    }
+
+    async function createSuperToken(underlyingAddress) {
+        superTokenFactoryABI = [
+            "function createERC20Wrapper(address, uint8, string, string) external returns(address)",
+            "event SuperTokenCreated(address indexed token)"
+        ];
+        superTokenFactoryAddr = await host.getSuperTokenFactory();
+        superTokenFactory = await ethers.getContractAt(superTokenFactoryABI, superTokenFactoryAddr, admin);
+
+        await superTokenFactory.createERC20Wrapper(underlyingAddress, 1, "dHEDGE Stablecoin Yield", "dUSDx");
+        superTokenFilter = await superTokenFactory.filters.SuperTokenCreated();
+        response = await superTokenFactory.queryFilter(superTokenFilter, -1, "latest");
+
+        return response[0].args[0];
+    }
+
+    async function createSFRegistrationKey(deployerAddr) {
+        registrationKey = `testKey-${Date.now()}`;
+        encodedKey = keccak256(
+            defaultAbiCoder.encode(
+                ["string", "address", "string"],
+                [
+                    "org.superfluid-finance.superfluid.appWhiteListing.registrationKey",
+                    deployerAddr,
+                    registrationKey,
+                ]
+            )
         );
 
-        coreToken = await ethers.getContractAt("IERC20", Pool1);
+        governance = await host.getGovernance();
 
-        // core = await dHedgeCoreFactory.deploy(
-        //     sf.host.address,
-        //     sf.agreements.cfa.address,
-        //     Pool2,
-        //     process.env.SF_REG_KEY
-        // );
+        sfGovernanceRO = await ethers.getContractAt(SuperfluidGovernanceBase.abi, governance);
 
-        // coreToken = await ethers.getContractAt("IERC20", Pool2);
+        govOwner = await sfGovernanceRO.owner();
+        [govOwnerSigner] = await impersonateAccounts([govOwner]);
 
-        await core.deployed();
-        await approveSuperTokens();
+        sfGovernance = await ethers.getContractAt(SuperfluidGovernanceBase.abi, governance, govOwnerSigner);
+
+        await sfGovernance.whiteListNewApp(SFConfig.hostAddress, encodedKey);
+
+        return registrationKey;
     }
 
-    async function approveSuperTokens() {
-        await USDCContract.connect(USDCWhale).approve(USDCx.address, parseUnits("1000", 6));
-        await DAIContract.connect(DAIWhale).approve(DAIx.address, parseUnits("1000", 18));
-        console.log("Tokens approved");
-    }
-
-    function createBatchCall(upgradeAmount = "0", depositAmount = "0", superTokenAddress) {
-        return [
-            [
-                101,
-                superTokenAddress,
-                ethers.utils.defaultAbiCoder.encode(
-                    ["uint256"],
-                    [parseUnits(upgradeAmount, 18).toString()]
-                )
-            ],
-            [
-                201,
-                sf.agreements.cfa.address,
-                ethers.utils.defaultAbiCoder.encode(
-                    ["bytes", "bytes"],
-                    [
-                        sf.agreements.cfa.contract.methods
-                            .createFlow(
-                                superTokenAddress,
-                                core.address,
-                                parseUnits(depositAmount, 18).div(getBigNumber(3600 * 24 * 30)),
-                                "0x"
-                            )
-                            .encodeABI(), // callData
-                        "0x" // userData
-                    ]
-                )
-            ]
-        ];
-    }
-
-    it("Should be able to start a stream", async () => {
-        await loadFixture(deployContracts);
-
-        await web3tx(
-            sf.host.batchCall,
-            "USDCWhale starting a flow"
-        )(createBatchCall("1000", "100", USDCx.address), { from: USDCWhale.address });
-
-        await web3tx(
-            sf.host.batchCall,
-            "DAIWhale starting a flow"
-        )(createBatchCall("1000", "100", DAIx.address), { from: DAIWhale.address });
-
-        expect((await sf.agreements.cfa.getNetFlow(DAIx.address, core.address)).toString(), parseUnits("100", 18).div(getSeconds(30)));
-        expect((await sf.agreements.cfa.getNetFlow(USDCx.address, core.address)).toString(), parseUnits("100", 18).div(getSeconds(30)));
-    });
-
-    it("Should be able to update a stream", async () => {
-        await loadFixture(deployContracts);
-
-        await web3tx(
-            sf.host.batchCall,
-            "USDCWhale starting a flow"
-        )(createBatchCall("1000", "100", USDCx.address), { from: USDCWhale.address });
-
-        await web3tx(
-            sf.host.batchCall,
-            "DAIWhale starting a flow"
-        )(createBatchCall("1000", "100", DAIx.address), { from: DAIWhale.address });
-
-        await increaseTime(getSeconds(30));
-
-        await sf.cfa.updateFlow({
-            superToken: USDCx.address,
-            sender: USDCWhale.address,
-            receiver: core.address,
-            flowRate: parseUnits("20", 18).div(getSeconds(30))
+    async function getIndexDetails(superToken, indexId) {
+        response = await sf.idaV1.getIndex({
+            superToken: USDC.superToken,
+            publisher: core.address,
+            indexId: "0",
+            providerOrSigner: ethersProvider
         });
 
-        await sf.cfa.updateFlow({
-            superToken: DAIx.address,
+        console.log("Index exists: ", response.exist);
+        console.log("Total units approved: ", response.totalUnitsApproved);
+        console.log("Total units pending: ", response.totalUnitsPending);
+
+        return response;
+    }
+
+    async function getUserUnits(superToken, indexId, userAddr) {
+        response = await sf.idaV1.getSubscription({
+            superToken: superToken,
+            publisher: core.address,
+            indexId: indexId,
+            subscriber: userAddr,
+            providerOrSigner: ethersProvider
+        });
+
+        console.log("Subscription approved: ", response.approved);
+        console.log("Units: ", response.units);
+        console.log("Pending distribution: ", response.pendingDistribution);
+
+        return response;
+    }
+
+    it("should be able to start/update/terminate streams", async () => {
+        await loadFixture(deployContracts);
+
+        console.log("Reached here 0");
+
+        await sf.cfaV1.createFlow({
+            superToken: DAI.superToken,
+            receiver: core.address,
+            flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+        }).exec(DAIWhale);
+
+        console.log("Reached here 1");
+
+        await getIndexDetails(DHPTx.address, "0");
+
+        await getUserUnits(DHPTx.address, "0", DAIWhale.address);
+
+        response = await sf.cfaV1.getNetFlow({
+            superToken: DAI.superToken,
+            account: DAIWhale.address,
+            providerOrSigner: ethersProvider
+        });
+
+        console.log("Get net flow response: ", response);
+
+        await sf.cfaV1.updateFlow({
+            superToken: DAI.superToken,
+            receiver: core.address,
+            flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+        }).exec(DAIWhale);
+
+        await getUserUnits(DHPTx.address, "0", DAIWhale.address);
+
+        await sf.cfaV1.deleteFlow({
+            superToken: DAI.superToken,
             sender: DAIWhale.address,
-            receiver: core.address,
-            flowRate: parseUnits("20", 18).div(getSeconds(30))
-        });
+            receiver: core.address
+        }).exec(DAIWhale);
 
-        expect((await sf.agreements.cfa.getNetFlow(USDCx.address, core.address)).toString(), parseUnits("20", 18).div(getSeconds(30)));
-        expect((await sf.agreements.cfa.getNetFlow(DAIx.address, core.address)).toString(), parseUnits("20", 18).div(getSeconds(30)));
-    });
-
-    it("Should be able to terminate a stream", async () => {
-        await loadFixture(deployContracts);
-
-        await web3tx(
-            sf.host.batchCall,
-            "USDCWhale starting a flow"
-        )(createBatchCall("1000", "100", USDCx.address), { from: USDCWhale.address });
-
-        await web3tx(
-            sf.host.batchCall,
-            "DAIWhale starting a flow"
-        )(createBatchCall("1000", "100", DAIx.address), { from: DAIWhale.address });
-
-        await increaseTime(getSeconds(30));
-
-        await sf.cfa.deleteFlow({
-            superToken: USDCx.address,
-            sender: USDCWhale.address,
-            receiver: core.address,
-            by: USDCWhale.address
-        });
-
-        await sf.cfa.deleteFlow({
-            superToken: DAIx.address,
-            sender: DAIWhale.address,
-            receiver: core.address,
-            by: DAIWhale.address
-        });
-
-        expect((await sf.agreements.cfa.getNetFlow(USDCx.address, core.address)).toString(), ethers.constants.Zero);
-        expect((await sf.agreements.cfa.getNetFlow(DAIx.address, core.address)).toString(), ethers.constants.Zero);
+        await getUserUnits(DHPTx.address, "0", DAIWhale.address);
     });
 });

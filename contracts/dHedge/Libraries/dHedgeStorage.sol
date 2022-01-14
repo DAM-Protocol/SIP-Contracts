@@ -3,8 +3,7 @@ pragma solidity ^0.8.4;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
-// import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {FlowData} from "../../Common/SFHelper.sol";
+import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 
 /**
  * @title dHedge storage library
@@ -13,51 +12,39 @@ import {FlowData} from "../../Common/SFHelper.sol";
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable contract-name-camelcase
+// solhint-disable var-name-mixedcase
 library dHedgeStorage {
     /**
+     * @param distIndex IDA distribution index with respect to an underlying token.
      * @param superToken Contains supported supertoken of an underlying token.
-     * @param currMarketIndex Represents the market index for a token. Useful for tracking users' entry and share.
-     * @param lendingData Array containing total amount of a token invested, 
-     * total LP token received and the lending timestamp. First parameter is market index followed by the address
-     * of underlying token.
+     * @param lastDeposit Latest timestamp of when an underlying token was deposited to a dHEDGE pool.
      */
     struct TokenData {
-        address superToken;
-        uint256 currMarketIndex;
-        mapping(uint256 => uint256[3]) lendingData;
-    }
-
-    /**
-     * @param userFlow Flow details corresponding to a user and a supertoken
-     * @param lockedShareAmount Share amount locked according to dHedge cooldown requirements
-     */
-    struct UserData {
-        FlowData userFlow;
-        uint256 lockedShareAmount;
+        ISuperToken superToken;
+        uint32 distIndex;
+        uint256 lastDepositAt;
     }
 
     /**
      * @notice Data related to lending of a token.
      * @param host Superfluid host contract.
      * @param cfa Superfluid constant flow agreement class address.
+     * @param ida Superfluid instant distribution agreement class address.
+     * @param DHPTx DHP super token for a dHEDGE pool.
      * @param isActive Status of contract representing a dHedge pool.
+     * @param poolLogic Address of a dHEDGE pool.
+     * @param feeRate Fee percentage with 6 decimals.
      * @param lastDepositTime Last time a deposit action took place in the pool. Useful to limit the time difference
      * between deposits in order to guard against perpetual cooldown issues
      * @param tokenData Contains data regarding a market (a token)
-     * @param userFlows Details of users' flows and investments (address1 = user address, address2 = underlying token address)
-     * @param redeemData Contains amount of LP tokens withdrawn by a user
-     * @param tokenSet Contains addresses of all the tokens currently supported by our contracts and the market
+     * @dev Another variable called `lastDistributeAt` may be required.
      */
     struct dHedgePool {
-        ISuperfluid host;
-        IConstantFlowAgreementV1 cfa;
         bool isActive;
-        uint256 lastDepositTime;
+        ISuperToken DHPTx; 
         address poolLogic;
-        address bank;
-        address[] tokenSet;
+        uint32 latestDistIndex;
+        uint32 feeRate;
         mapping(address => TokenData) tokenData;
-        mapping(address => mapping(address => UserData)) userFlows;
-        mapping(address => uint256) redeemData;
     }
 }

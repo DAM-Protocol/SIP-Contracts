@@ -9,7 +9,6 @@ require("solidity-coverage");
 require('hardhat-contract-sizer');
 require("hardhat-tracer");
 require("hardhat-deploy");
-require("@tenderly/hardhat-tenderly");
 require("./tasks/dHedge/CreateSIP");
 require("./tasks/dHedge/PauseCore");
 require("./tasks/dHedge/DeactivateCore");
@@ -27,7 +26,7 @@ require("./tasks/dHedge/DeactivateCore");
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 22006546,
+        blockNumber: 23231719,
         enabled: true
       },
       blockGasLimit: 20000000,

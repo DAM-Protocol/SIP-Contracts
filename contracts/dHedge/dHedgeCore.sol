@@ -3,12 +3,13 @@ pragma solidity ^0.8.4;
 
 import {ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
+import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
-import {FlowData} from "../Common/SFHelper.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Core contract for a dHedge pool
@@ -17,75 +18,72 @@ import "./Libraries/dHedgeStorage.sol";
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable reason-string
+// solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCore is Ownable, SuperAppBase {
     using SafeERC20 for IERC20;
     using dHedgeHelper for dHedgeStorage.dHedgePool;
-    using SFHelper for *;
+    using SFHelper for ISuperToken;
 
     dHedgeStorage.dHedgePool private poolData;
 
     constructor(
-        ISuperfluid _host,
-        IConstantFlowAgreementV1 _cfa,
         address _dHedgePool,
-        address _bank,
+        ISuperToken _DHPTx,
+        uint32 _feeRate,
         string memory _regKey
     ) {
-        require(
-            address(_host) != address(0),
-            "dHedgeCore: Host address invalid"
-        );
-        require(address(_cfa) != address(0), "dHedgeCore: CFA address invalid");
-        require(_dHedgePool != address(0), "dHedgeCore: Pool address invalid");
-        require(_bank != address(0), "dHedgeCore: Bank address invalid");
-
-        poolData.host = _host;
-        poolData.cfa = _cfa;
-        poolData.poolLogic = _dHedgePool;
-        poolData.bank = _bank;
         poolData.isActive = true;
-
-        // Providing dHedgeBank with unlimited allowance for storing LP tokens
-        IERC20(_dHedgePool).safeIncreaseAllowance(_bank, type(uint256).max);
+        poolData.DHPTx = _DHPTx;
+        poolData.poolLogic = _dHedgePool;
+        poolData.feeRate = _feeRate;
 
         // NOTE: configword is used to omit the specific agreement hooks (NOOP - Not Operate)
         uint256 _configWord = SuperAppDefinitions.APP_LEVEL_FINAL;
 
         (bytes(_regKey).length == 0)
-            ? poolData.host.registerApp(_configWord)
-            : poolData.host.registerAppWithKey(_configWord, _regKey);
+            ? SFHelper.HOST.registerApp(_configWord)
+            : SFHelper.HOST.registerAppWithKey(_configWord, _regKey);
     }
 
     /**************************************************************************
      * Core functions
      *************************************************************************/
 
+    function addSuperTokenAndIndex(ISuperToken _superToken) external onlyOwner {
+        address _underlyingToken = _superToken.getUnderlyingToken();
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+            _underlyingToken
+        ];
+
+        require(
+            address(tokenData.superToken) == address(0),
+            "dHedgeCore: Supertoken already mapped"
+        );
+
+        tokenData.superToken = _superToken;
+        tokenData.distIndex = poolData.latestDistIndex++;
+
+        poolData.DHPTx.createIndex(tokenData.distIndex);
+
+        console.log("Index created");
+
+        IERC20(_underlyingToken).safeIncreaseAllowance(
+            poolData.poolLogic,
+            type(uint256).max
+        );
+
+        IERC20(_underlyingToken).safeIncreaseAllowance(
+            address(poolData.DHPTx),
+            type(uint256).max
+        );
+    }
+
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
     function dHedgeDeposit(address _token) external {
         _onlyActive();
         poolData.deposit(_token);
-    }
-
-    /// @notice Withdraws LP tokens of the pool to the caller
-    /// @param _amount Amount of LP tokens to be withdrawn
-    function dHedgeWithdraw(uint256 _amount) external {
-        poolData.withdrawLPT(_amount);
-    }
-
-    /// @notice Withdraws all the uninvested tokens of the caller
-    function withdrawUninvestedAll() external {
-        poolData.withdrawUninvestedAll();
-    }
-
-    /// @notice Withdraws uninvested tokens in a specific amount
-    /// @param _token Address of the underlying token
-    /// @param _amount Amount of uninvested token to be withdrawn
-    function withdrawUninvestedSingle(address _token, uint256 _amount)
-        external
-    {
-        poolData.withdrawUninvestedSingle(_token, _amount);
     }
 
     /// @dev Function to withdraw a token in case of emergency
@@ -112,27 +110,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         require(!poolData.isActive, "dHedgeCore: Pool already active");
 
         poolData.isActive = true;
-    }
-
-    /// @dev Moves LP tokens from core contract to bank contract
-    /// This is automatically done by the keepers when dpositing or when someone withdraws LP tokens
-    function moveLPT() external {
-        _onlyActive();
-        poolData.moveLPT();
-    }
-
-    /// @notice Calculates withdrawable amount. Also accounts for cooldown period.
-    /// @param _user Address of the user whose withdrawable amount needs to be calculated
-    /// @return Amount that can be withdrawn immediately
-    function calcWithdrawable(address _user) external view returns (uint256) {
-        return poolData.calcWithdrawable(_user);
-    }
-
-    /// @notice Calculates locked share amount of a user for a particular token
-    /// @param _user Address of the user whose locked share amount needs to be calculated
-    /// @return LP token amount that's locked and not available for withdrawal
-    function calcUserLockedShareAmount(address _user) external view returns (uint256) {
-        return poolData.calcUserTotalLocked(_user);
     }
 
     /// @notice Calculates uninvested token amount of a particular user
@@ -169,46 +146,47 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @dev Helper function that's called after agreements are created, updated or terminated
     /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
     /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    function _afterAgreement(bytes memory _cbdata, address _underlyingToken)
-        internal
-    {
-        (
-            address _sender,
-            uint256 _prevUninvestedSum,
-            uint256 _prevShareAmount,
-            uint256 _prevLockedShareAmount
-        ) = abi.decode(_cbdata, (address, uint256, uint256, uint256));
+    function _afterAgreement(
+        bytes memory _ctx,
+        bytes memory _cbdata,
+        address _underlyingToken
+    ) internal returns (bytes memory _newCtx) {
+        address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+        uint256 _userUninvested = abi.decode(_cbdata, (uint256));
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+            _underlyingToken
+        ];
 
-        FlowData storage _userFlow = poolData
-        .userFlows[_sender][_underlyingToken].userFlow;
+        _newCtx = tokenData.superToken.updateShares(
+            poolData.DHPTx,
+            tokenData.distIndex,
+            _ctx
+        );
 
-        _userFlow._updateFlowDetails(_prevUninvestedSum, _prevShareAmount);
-        _userFlow.updateIndex = poolData
-            .tokenData[_underlyingToken]
-            .currMarketIndex;
-        poolData
-        .userFlows[_sender][_underlyingToken]
-            .lockedShareAmount = _prevLockedShareAmount;
+        assert(
+            _userUninvested <= tokenData.superToken.balanceOf(address(this))
+        );
+
+        require(
+            tokenData.superToken.transfer(_sender, _userUninvested),
+            "dHedgeHCore: Uninvested amount transfer failed"
+        );
     }
 
     /// @dev Helper function that's called before agreements are created, updated or terminated
     /// @param _ctx Context data of a user provided by SF contract
     /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    /// @return Callback data that needs to be passed on to _afterAgreement function
+    /// @return _cbdata Callback data that needs to be passed on to _afterAgreement function
     function _beforeAgreement(bytes memory _ctx, address _underlyingToken)
         internal
         view
-        returns (bytes memory)
+        returns (bytes memory _cbdata)
     {
-        address _sender = poolData.host.decodeCtx(_ctx).msgSender;
+        address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
 
-        return
-            abi.encode(
-                _sender,
-                poolData.calcUserUninvested(_sender, _underlyingToken),
-                poolData.calcUserShare(_sender, _underlyingToken),
-                poolData.calcUserLocked(_sender, _underlyingToken)
-            );
+        _cbdata = abi.encode(
+            poolData.calcUserUninvested(_sender, _underlyingToken)
+        );
     }
 
     /// @dev Checks status of the core and reverts if inactive
@@ -224,19 +202,23 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @dev Checks if the caller is the SF host contract
     function _onlyHost() internal view {
         require(
-            msg.sender == address(poolData.host),
+            msg.sender == address(SFHelper.HOST),
             "dHedgeCore: Supports only one host"
         );
     }
 
     /// @dev Checks if the agreement is of type CFA
-    function _onlyCFA(address _agreementClass) internal view {
+    function _onlyExpected(address _agreementClass) internal view {
         require(
             ISuperAgreement(_agreementClass).agreementType() ==
                 keccak256(
                     "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
+                ) ||
+                ISuperAgreement(_agreementClass).agreementType() ==
+                keccak256(
+                    "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
                 ),
-            "dHedgeCore: Supports only one CFA"
+            "dHedgeCore: Callback called illegaly"
         );
     }
 
@@ -249,59 +231,89 @@ contract dHedgeCore is Ownable, SuperAppBase {
         address _agreementClass,
         bytes32, /*agreementId*/
         bytes calldata, /*agreementData*/
-        bytes calldata _ctx
-    ) external view override returns (bytes memory cbdata) {
+        bytes calldata // _ctx
+    ) external view override returns (bytes memory _cbdata) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
         _onlyActive();
 
+        console.log("Entered beforeAgreementCreated");
+
         address _underlyingToken = _superToken.getUnderlyingToken();
+        ISuperToken _superStreamToken = poolData
+            .tokenData[_underlyingToken]
+            .superToken;
 
-        if (!poolData.isDepositAsset(_underlyingToken)) {
-            revert("Token not deposit asset");
-        }
+        require(
+            address(_superStreamToken) == address(0) ||
+                _superStreamToken == _superToken,
+            "dHedgeCore: Supertoken not supported"
+        );
+        require(
+            poolData.isDepositAsset(_underlyingToken),
+            "dHedgeCore: Not deposit asset"
+        );
 
-        return _beforeAgreement(_ctx, _underlyingToken);
+        _cbdata = new bytes(0);
+
+        console.log("Exited beforeAgreementCreated");
     }
 
     function afterAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
         bytes32, // _agreementId,
-        bytes calldata, // agreementData,
-        bytes calldata _cbdata,
+        bytes calldata, // _agreementData,
+        bytes calldata, // _cbdata,
         bytes calldata _ctx
-    ) external override returns (bytes memory newCtx) {
+    ) external override returns (bytes memory _newCtx) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
+
+        console.log("Entered afterAgreementCreated");
 
         address _underlyingToken = _superToken.getUnderlyingToken();
-
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+            _underlyingToken
+        ];
         /* 
             Check if the underlying token is enabled as deposit asset. If not, 
             revert the transaction as the tokens can't be deposited into the pool.
-            If yes: 
-                Check if the asset is contained by our tokenset and add it if it isn't.
+            If yes:
                 Map supertoken to the underlying token.
                 Unlimited approve underlying token to the dHedge pool.
             Confirm whether unlimited approve can be misused by the poolLogic contract.
         */
-        if (poolData.tokenData[_underlyingToken].superToken == address(0)) {
-            poolData.tokenSet.push(_underlyingToken);
-            poolData.tokenData[_underlyingToken].superToken = address(
-                _superToken
-            );
-            poolData.tokenData[_underlyingToken].currMarketIndex = 1;
+        // if (address(tokenData.superToken) == address(0)) {
+        //     console.log("Entered supertoken mapping");
 
-            IERC20(_underlyingToken).safeIncreaseAllowance(
-                poolData.poolLogic,
-                type(uint256).max
-            );
-        }
+        //     tokenData.superToken = _superToken;
+        //     tokenData.distIndex = poolData.latestDistIndex++;
 
-        _afterAgreement(_cbdata, _underlyingToken);
+        //     poolData.DHPTx.createIndex(tokenData.distIndex, _ctx);
 
-        return _ctx;
+        //     console.log("Index created");
+
+        //     IERC20(_underlyingToken).safeIncreaseAllowance(
+        //         poolData.poolLogic,
+        //         type(uint256).max
+        //     );
+
+        //     IERC20(_underlyingToken).safeIncreaseAllowance(
+        //         address(poolData.DHPTx),
+        //         type(uint256).max
+        //     );
+        // }
+
+        // console.log("Exited supertoken mapping");
+
+        _newCtx = _superToken.updateShares(
+            poolData.DHPTx,
+            tokenData.distIndex,
+            _ctx
+        );
+
+        console.log("Exited afterAgreementCreated");
     }
 
     function beforeAgreementUpdated(
@@ -310,12 +322,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
         bytes32, /*agreementId*/
         bytes calldata, /*agreementData*/
         bytes calldata _ctx
-    ) external view override returns (bytes memory cbdata) {
+    ) external view override returns (bytes memory _cbdata) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
         _onlyActive();
 
-        return _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
+        _cbdata = _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
     }
 
     function afterAgreementUpdated(
@@ -325,13 +337,15 @@ contract dHedgeCore is Ownable, SuperAppBase {
         bytes calldata, //_agreementData,
         bytes calldata _cbdata, //_cbdata,
         bytes calldata _ctx
-    ) external override returns (bytes memory newCtx) {
+    ) external override returns (bytes memory _newCtx) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
 
-        _afterAgreement(_cbdata, _superToken.getUnderlyingToken());
-
-        return _ctx;
+        _newCtx = _afterAgreement(
+            _ctx,
+            _cbdata,
+            _superToken.getUnderlyingToken()
+        );
     }
 
     function beforeAgreementTerminated(
@@ -340,11 +354,11 @@ contract dHedgeCore is Ownable, SuperAppBase {
         bytes32, /*agreementId*/
         bytes calldata, /*agreementData*/
         bytes calldata _ctx
-    ) external view override returns (bytes memory cbdata) {
+    ) external view override returns (bytes memory _cbdata) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
 
-        return _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
+        _cbdata = _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
     }
 
     function afterAgreementTerminated(
@@ -354,12 +368,14 @@ contract dHedgeCore is Ownable, SuperAppBase {
         bytes calldata, // _agreementData,
         bytes calldata _cbdata, //_cbdata,
         bytes calldata _ctx
-    ) external override returns (bytes memory newCtx) {
+    ) external override returns (bytes memory _newCtx) {
         _onlyHost();
-        _onlyCFA(_agreementClass);
+        _onlyExpected(_agreementClass);
 
-        _afterAgreement(_cbdata, _superToken.getUnderlyingToken());
-
-        return _ctx;
+        _newCtx = _afterAgreement(
+            _ctx,
+            _cbdata,
+            _superToken.getUnderlyingToken()
+        );
     }
 }
