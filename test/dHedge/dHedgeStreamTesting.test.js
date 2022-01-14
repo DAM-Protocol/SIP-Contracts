@@ -181,7 +181,7 @@ describe("dHedgeCore Stream Testing", function () {
 
     async function getIndexDetails(superToken, indexId) {
         response = await sf.idaV1.getIndex({
-            superToken: USDC.superToken,
+            superToken: superToken,
             publisher: core.address,
             indexId: "0",
             providerOrSigner: ethersProvider

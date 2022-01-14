@@ -101,7 +101,8 @@ library SFHelper {
                 _superDistToken,
                 _index,
                 _msgSender,
-                uint128(_userFlowRate / 1e9)
+                uint128(_userFlowRate / 1e9),
+                new bytes(0)
             ),
             new bytes(0),
             _ctx
