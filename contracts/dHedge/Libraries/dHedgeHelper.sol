@@ -171,10 +171,10 @@ library dHedgeHelper {
         address _user,
         address _depositToken
     ) public view returns (uint256 _userUninvested) {
-        ISuperToken _superToken = ISuperToken(_depositToken);
-        _userUninvested = _superToken.calcUserUninvested(
+        dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[_depositToken];
+        _userUninvested = tokenData.superToken.calcUserUninvested(
             _user,
-            _dHedgePool.tokenData[_depositToken].lastDepositAt
+            tokenData.lastDepositAt
         );
     }
 

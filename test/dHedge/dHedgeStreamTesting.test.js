@@ -84,8 +84,6 @@ describe("dHedgeCore Stream Testing", function () {
         DHPTx = await ethers.getContractAt("IERC20", DHPTxAddr);
         DHPT = await ethers.getContractAt("IERC20", Pool1);
         
-        console.log("Supertoken created for pool");
-
         SFHelperFactory = await ethers.getContractFactory("SFHelper");
         SFHelper = await SFHelperFactory.deploy();
         await SFHelper.deployed();
@@ -133,8 +131,6 @@ describe("dHedgeCore Stream Testing", function () {
         await USDCx.upgrade({ amount: parseUnits("1000", 18) }).exec(USDCWhale);
         await DAIx.upgrade({ amount: parseUnits("1000", 18) }).exec(DAIWhale);
         await DAIx.upgrade({ amount: parseUnits("1000", 18) }).exec(DAIWhale2);
-
-        console.log("Contracts deployed !");
     }
 
     async function createSuperToken(underlyingAddress) {
@@ -213,35 +209,45 @@ describe("dHedgeCore Stream Testing", function () {
     it("should be able to start/update/terminate streams", async () => {
         await loadFixture(deployContracts);
 
-        console.log("Reached here 0");
+        userFlowRate = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
 
         await sf.cfaV1.createFlow({
             superToken: DAI.superToken,
             receiver: core.address,
-            flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            flowRate: userFlowRate
         }).exec(DAIWhale);
-
-        console.log("Reached here 1");
 
         await getIndexDetails(DHPTx.address, "0");
 
         await getUserUnits(DHPTx.address, "0", DAIWhale.address);
 
-        response = await sf.cfaV1.getNetFlow({
+        flowRateResponse = await sf.cfaV1.getFlow({
             superToken: DAI.superToken,
-            account: DAIWhale.address,
+            sender: DAIWhale.address,
+            receiver: core.address,
             providerOrSigner: ethersProvider
         });
 
-        console.log("Get net flow response: ", response);
+        expect(flowRateResponse.flowRate).to.equal(userFlowRate);
+
+        userFlowRate = parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30));
 
         await sf.cfaV1.updateFlow({
             superToken: DAI.superToken,
             receiver: core.address,
-            flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            flowRate: userFlowRate
         }).exec(DAIWhale);
 
         await getUserUnits(DHPTx.address, "0", DAIWhale.address);
+
+        flowRateResponse = await sf.cfaV1.getFlow({
+            superToken: DAI.superToken,
+            sender: DAIWhale.address,
+            receiver: core.address,
+            providerOrSigner: ethersProvider
+        });
+
+        expect(flowRateResponse.flowRate).to.equal(userFlowRate);
 
         await sf.cfaV1.deleteFlow({
             superToken: DAI.superToken,
@@ -250,5 +256,14 @@ describe("dHedgeCore Stream Testing", function () {
         }).exec(DAIWhale);
 
         await getUserUnits(DHPTx.address, "0", DAIWhale.address);
+
+        flowRateResponse = await sf.cfaV1.getFlow({
+            superToken: DAI.superToken,
+            sender: DAIWhale.address,
+            receiver: core.address,
+            providerOrSigner: ethersProvider
+        });
+        
+        expect(flowRateResponse.flowRate).to.equal(constants.Zero);
     });
 });
