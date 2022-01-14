@@ -284,28 +284,28 @@ contract dHedgeCore is Ownable, SuperAppBase {
                 Unlimited approve underlying token to the dHedge pool.
             Confirm whether unlimited approve can be misused by the poolLogic contract.
         */
-        // if (address(tokenData.superToken) == address(0)) {
-        //     console.log("Entered supertoken mapping");
+        if (address(tokenData.superToken) == address(0)) {
+            console.log("Entered supertoken mapping");
 
-        //     tokenData.superToken = _superToken;
-        //     tokenData.distIndex = poolData.latestDistIndex++;
+            tokenData.superToken = _superToken;
+            tokenData.distIndex = poolData.latestDistIndex++;
 
-        //     poolData.DHPTx.createIndex(tokenData.distIndex, _ctx);
+            poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _ctx);
 
-        //     console.log("Index created");
+            console.log("Index created");
 
-        //     IERC20(_underlyingToken).safeIncreaseAllowance(
-        //         poolData.poolLogic,
-        //         type(uint256).max
-        //     );
+            IERC20(_underlyingToken).safeIncreaseAllowance(
+                poolData.poolLogic,
+                type(uint256).max
+            );
 
-        //     IERC20(_underlyingToken).safeIncreaseAllowance(
-        //         address(poolData.DHPTx),
-        //         type(uint256).max
-        //     );
-        // }
+            IERC20(_underlyingToken).safeIncreaseAllowance(
+                address(poolData.DHPTx),
+                type(uint256).max
+            );
+        }
 
-        // console.log("Exited supertoken mapping");
+        console.log("Exited supertoken mapping");
 
         _newCtx = _superToken.updateShares(
             poolData.DHPTx,
