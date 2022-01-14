@@ -57,6 +57,24 @@ library SFHelper {
         }
     }
 
+    function createIndexInCallback(
+        ISuperToken _superToken,
+        uint32 _index,
+        bytes memory _ctx
+    ) external returns (bytes memory _newCtx) {
+        (_newCtx, ) = HOST.callAgreementWithContext(
+            IDA_V1, 
+            abi.encodeWithSelector(
+                IDA_V1.createIndex.selector,
+                _superToken,
+                _index,
+                new bytes (0) // placeholder ctx
+            ),
+            new bytes(0), // userData
+            _ctx
+        );
+    }
+
     function distribute(
         ISuperToken _superToken,
         uint32 _index,
