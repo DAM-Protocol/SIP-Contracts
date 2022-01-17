@@ -3,6 +3,7 @@ const { ethers, waffle } = require("hardhat");
 const { provider, loadFixture } = waffle;
 const { parseUnits } = require("@ethersproject/units");
 const SuperfluidSDK = require("@superfluid-finance/sdk-core");
+const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
 const {
     getBigNumber,
     getTimeStamp,
@@ -14,8 +15,6 @@ const {
     impersonateAccounts
 } = require("../../helpers/helpers");
 const { defaultAbiCoder, keccak256 } = require("ethers/lib/utils");
-const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
-const SuperfluidTokenFactory = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperTokenFactoryBase.json");
 const { constants } = require("ethers");
 
 describe("dHedgeCore Stream Testing", function () {
@@ -34,7 +33,7 @@ describe("dHedgeCore Stream Testing", function () {
         CFAv1: "0x6EeE6060f715257b970700bc2656De21dEdF074C",
         IDAv1: "0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1"
     }
-    
+
     const hostABI = [
         "function getGovernance() external view returns (address)",
         "function getSuperTokenFactory() external view returns(address)"
@@ -43,18 +42,18 @@ describe("dHedgeCore Stream Testing", function () {
     const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
     const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
     const DAIWhaleAddr2 = "0x4A35582a710E1F4b2030A3F826DA20BfB6703C09";
-    
+
     // dHEDGE Stablecoin Yield (https://app.dhedge.org/pool/0xbae28251b2a4e621aa7e20538c06dee010bc06de)
     // Supports DAI and USDC
     const Pool1 = "0xbae28251b2a4e621aa7e20538c06dee010bc06de";
-    
+
     // SNX Debt Mirror (https://app.dhedge.org/pool/0x65bb99e80a863e0e27ee6d09c794ed8c0be47186)
     // Supports USDC only
     const Pool2 = "0x65bb99e80a863e0e27ee6d09c794ed8c0be47186";
-    
+
     const [admin] = provider.getWallets();
     const ethersProvider = provider;
-    
+
     let sf, host;
     let USDCWhale, DAIWhale, DAIWhale2;
     let DAIContract, USDCContract;
@@ -74,16 +73,16 @@ describe("dHedgeCore Stream Testing", function () {
             protocolReleaseVersion: "v1",
             provider: ethersProvider
         });
-        
+
         host = await ethers.getContractAt(hostABI, SFConfig.hostAddress);
-        
+
         USDCx = await sf.loadSuperToken(USDC.superToken);
         DAIx = await sf.loadSuperToken(DAI.superToken);
 
         DHPTxAddr = await createSuperToken(Pool1);
         DHPTx = await ethers.getContractAt("IERC20", DHPTxAddr);
         DHPT = await ethers.getContractAt("IERC20", Pool1);
-        
+
         SFHelperFactory = await ethers.getContractFactory("SFHelper");
         SFHelper = await SFHelperFactory.deploy();
         await SFHelper.deployed();
@@ -118,11 +117,8 @@ describe("dHedgeCore Stream Testing", function () {
             "20000",
             regKey
         );
-        
-        await core.deployed();
 
-        await core.addSuperTokenAndIndex(USDC.superToken);
-        await core.addSuperTokenAndIndex(DAI.superToken);
+        await core.deployed();
 
         await USDCContract.connect(USDCWhale).approve(USDC.superToken, parseUnits("1000000", 6));
         await DAIContract.connect(DAIWhale).approve(DAI.superToken, parseUnits("1000000", 18));
@@ -179,13 +175,13 @@ describe("dHedgeCore Stream Testing", function () {
         response = await sf.idaV1.getIndex({
             superToken: superToken,
             publisher: core.address,
-            indexId: "0",
+            indexId: indexId,
             providerOrSigner: ethersProvider
         });
 
-        console.log("Index exists: ", response.exist);
-        console.log("Total units approved: ", response.totalUnitsApproved);
-        console.log("Total units pending: ", response.totalUnitsPending);
+        console.log(`Index id ${indexId} exists: ${response.exist}`);
+        console.log(`Total units approved for index id ${indexId}: ${response.totalUnitsApproved}`);
+        console.log(`Total units pending for index id ${indexId}: ${response.totalUnitsPending}`);
 
         return response;
     }
@@ -199,17 +195,18 @@ describe("dHedgeCore Stream Testing", function () {
             providerOrSigner: ethersProvider
         });
 
-        console.log("Subscription approved: ", response.approved);
-        console.log("Units: ", response.units);
-        console.log("Pending distribution: ", response.pendingDistribution);
+        console.log(`Subscription approved for index id ${indexId} and address ${userAddr}: ${response.approved}`);
+        console.log(`Units of index id ${indexId} for address ${userAddr}: ${response.units}`);
+        console.log(`Pending distribution of index id ${indexId} for address ${userAddr}: ${response.pendingDistribution}`);
 
         return response;
     }
 
-    it("should be able to start/update/terminate streams", async () => {
+    it.only("should be able to start/update/terminate streams", async () => {
         await loadFixture(deployContracts);
 
         userFlowRate = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
+        distIndex = await core.getLatestDistIndex();
 
         await sf.cfaV1.createFlow({
             superToken: DAI.superToken,
@@ -220,6 +217,12 @@ describe("dHedgeCore Stream Testing", function () {
         await getIndexDetails(DHPTx.address, "0");
 
         await getUserUnits(DHPTx.address, "0", DAIWhale.address);
+
+        await sf.idaV1.approveSubscription({
+            indexId: distIndex.toString(),
+            superToken: DHPTx.address,
+            publisher: core.address
+        }).exec(DAIWhale);
 
         flowRateResponse = await sf.cfaV1.getFlow({
             superToken: DAI.superToken,
@@ -263,7 +266,33 @@ describe("dHedgeCore Stream Testing", function () {
             receiver: core.address,
             providerOrSigner: ethersProvider
         });
-        
+
         expect(flowRateResponse.flowRate).to.equal(constants.Zero);
+    });
+
+    it("should be able to create multiple indices", async () => {
+        await loadFixture(deployContracts);
+
+        userFlowRate = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
+
+        await sf.cfaV1.createFlow({
+            superToken: DAI.superToken,
+            receiver: core.address,
+            flowRate: userFlowRate
+        }).exec(DAIWhale);
+
+        response = await getIndexDetails(DHPTx.address, "0");
+
+        expect(response.exist).to.equal(true);
+
+        await sf.cfaV1.createFlow({
+            superToken: USDC.superToken,
+            receiver: core.address,
+            flowRate: userFlowRate
+        }).exec(USDCWhale);
+
+        repsonse = await getIndexDetails(DHPTx.address, "1");
+
+        expect(response.exist).to.equal(true);
     });
 });

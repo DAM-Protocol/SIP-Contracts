@@ -26,7 +26,7 @@ require("./tasks/dHedge/DeactivateCore");
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 23231719,
+        blockNumber: 23736635,
         enabled: true
       },
       blockGasLimit: 20000000,

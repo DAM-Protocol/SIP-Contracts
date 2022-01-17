@@ -192,7 +192,7 @@ library dHedgeHelper {
         IPoolManagerLogic _supportLogic = IPoolManagerLogic(
             _poolLogic.poolManagerLogic()
         );
-
+        
         return _supportLogic.isDepositAsset(_token);
     }
 }

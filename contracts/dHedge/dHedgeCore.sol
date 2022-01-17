@@ -44,40 +44,47 @@ contract dHedgeCore is Ownable, SuperAppBase {
         (bytes(_regKey).length == 0)
             ? SFHelper.HOST.registerApp(_configWord)
             : SFHelper.HOST.registerAppWithKey(_configWord, _regKey);
+
+        // Note: Disable when running tests with mock
+        IERC20(_dHedgePool).safeIncreaseAllowance(
+            address(_DHPTx),
+            type(uint256).max
+        );
     }
 
     /**************************************************************************
      * Core functions
      *************************************************************************/
 
-    function addSuperTokenAndIndex(ISuperToken _superToken) external onlyOwner {
-        address _underlyingToken = _superToken.getUnderlyingToken();
-        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
-            _underlyingToken
-        ];
+    // function addSuperTokenAndIndex(ISuperToken _superToken) external {
+    //     _onlyOwner(msg.sender);
+    //     address _underlyingToken = _superToken.getUnderlyingToken();
+    //     dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+    //         _underlyingToken
+    //     ];
 
-        require(
-            address(tokenData.superToken) == address(0),
-            "dHedgeCore: Supertoken already mapped"
-        );
+    //     require(
+    //         address(tokenData.superToken) == address(0),
+    //         "dHedgeCore: Supertoken already mapped"
+    //     );
 
-        tokenData.superToken = _superToken;
-        tokenData.distIndex = poolData.latestDistIndex++;
+    //     tokenData.superToken = _superToken;
+    //     tokenData.distIndex = poolData.latestDistIndex++;
 
-        poolData.DHPTx.createIndex(tokenData.distIndex);
+    //     poolData.DHPTx.createIndex(tokenData.distIndex);
 
-        console.log("Index created");
+    //     console.log("Index created");
 
-        IERC20(_underlyingToken).safeIncreaseAllowance(
-            poolData.poolLogic,
-            type(uint256).max
-        );
+    //     IERC20(_underlyingToken).safeIncreaseAllowance(
+    //         poolData.poolLogic,
+    //         type(uint256).max
+    //     );
 
-        IERC20(_underlyingToken).safeIncreaseAllowance(
-            address(poolData.DHPTx),
-            type(uint256).max
-        );
-    }
+    //     IERC20(_underlyingToken).safeIncreaseAllowance(
+    //         address(poolData.DHPTx),
+    //         type(uint256).max
+    //     );
+    // }
 
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
@@ -112,18 +119,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         poolData.isActive = true;
     }
 
-    /// @notice Calculates uninvested token amount of a particular user
-    /// @param _user Address of the user whose uninvested amount needs to be calculated
-    /// @param _token Address of the underlying token
-    /// @return Amount of uninvested tokens
-    function calcUserUninvested(address _user, address _token)
-        external
-        view
-        returns (uint256)
-    {
-        return poolData.calcUserUninvested(_user, _token);
-    }
-
     /// @notice Checks if the core is active or not
     /// @return Boolean indicating working status of core
     function checkCoreActive() external view returns (bool) {
@@ -134,6 +129,26 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @return Returns address of the dHedge pool this core contract serves
     function getPoolLogic() external view returns (address) {
         return poolData.poolLogic;
+    }
+
+    function getLatestDistIndex() external view returns (uint32) {
+        return poolData.latestDistIndex;
+    }
+
+    function getTokenDistIndex(address _token) external view returns (uint32) {
+        return poolData.tokenData[_token].distIndex;
+    }
+
+    /// @notice Calculates uninvested token amount of a particular user
+    /// @param _user Address of the user whose uninvested amount needs to be calculated
+    /// @param _token Address of the underlying token
+    /// @return Amount of uninvested tokens
+    function calcUserUninvested(address _user, address _token)
+        public
+        view
+        returns (uint256)
+    {
+        return poolData.calcUserUninvested(_user, _token);
     }
 
     /// @dev Checks if deposit action can be performed
@@ -147,46 +162,63 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
     /// @param _underlyingToken Address of the underlying token on which operations need to be performed
     function _afterAgreement(
+        address _agreementClass,
+        address _underlyingToken,
         bytes memory _ctx,
-        bytes memory _cbdata,
-        address _underlyingToken
+        bytes memory _cbdata
     ) internal returns (bytes memory _newCtx) {
-        address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
-        uint256 _userUninvested = abi.decode(_cbdata, (uint256));
-        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
-            _underlyingToken
-        ];
+        if (
+            ISuperAgreement(_agreementClass).agreementType() ==
+            keccak256(
+                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+            )
+        ) {
+            _newCtx = _ctx;
+        } else {
+            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+            uint256 _userUninvested = abi.decode(_cbdata, (uint256));
+            dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+                _underlyingToken
+            ];
 
-        _newCtx = tokenData.superToken.updateShares(
-            poolData.DHPTx,
-            tokenData.distIndex,
-            _ctx
-        );
+            _newCtx = tokenData.superToken.updateSharesInCallback(
+                poolData.DHPTx,
+                tokenData.distIndex,
+                _ctx
+            );
 
-        assert(
-            _userUninvested <= tokenData.superToken.balanceOf(address(this))
-        );
+            assert(
+                _userUninvested <= tokenData.superToken.balanceOf(address(this))
+            );
 
-        require(
-            tokenData.superToken.transfer(_sender, _userUninvested),
-            "dHedgeHCore: Uninvested amount transfer failed"
-        );
+            require(
+                tokenData.superToken.transfer(_sender, _userUninvested),
+                "dHedgeHCore: Uninvested amount transfer failed"
+            );
+        }
     }
 
     /// @dev Helper function that's called before agreements are created, updated or terminated
     /// @param _ctx Context data of a user provided by SF contract
     /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    /// @return _cbdata Callback data that needs to be passed on to _afterAgreement function
-    function _beforeAgreement(bytes memory _ctx, address _underlyingToken)
-        internal
-        view
-        returns (bytes memory _cbdata)
-    {
-        address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+    /// @return _cbdata Callback data that needs to be passed on to _afterAgreementCFA function
+    function _beforeAgreement(
+        address _agreementClass,
+        address _underlyingToken,
+        bytes memory _ctx
+    ) internal view returns (bytes memory _cbdata) {
+        if (
+            ISuperAgreement(_agreementClass).agreementType() ==
+            keccak256(
+                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+            )
+        ) {
+            _cbdata = new bytes(0);
+        } else {
+            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
 
-        _cbdata = abi.encode(
-            poolData.calcUserUninvested(_sender, _underlyingToken)
-        );
+            _cbdata = abi.encode(calcUserUninvested(_sender, _underlyingToken));
+        }
     }
 
     /// @dev Checks status of the core and reverts if inactive
@@ -237,8 +269,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyExpected(_agreementClass);
         _onlyActive();
 
-        console.log("Entered beforeAgreementCreated");
-
         address _underlyingToken = _superToken.getUnderlyingToken();
         ISuperToken _superStreamToken = poolData
             .tokenData[_underlyingToken]
@@ -255,8 +285,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         );
 
         _cbdata = new bytes(0);
-
-        console.log("Exited beforeAgreementCreated");
     }
 
     function afterAgreementCreated(
@@ -270,8 +298,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        console.log("Entered afterAgreementCreated");
-
         address _underlyingToken = _superToken.getUnderlyingToken();
         dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
             _underlyingToken
@@ -282,38 +308,26 @@ contract dHedgeCore is Ownable, SuperAppBase {
             If yes:
                 Map supertoken to the underlying token.
                 Unlimited approve underlying token to the dHedge pool.
-            Confirm whether unlimited approve can be misused by the poolLogic contract.
+                Unlimited approve DHPT to DHPTx contract.
+            TODO: Confirm whether unlimited approve can be misused by the poolLogic contract.
         */
         if (address(tokenData.superToken) == address(0)) {
-            console.log("Entered supertoken mapping");
-
             tokenData.superToken = _superToken;
             tokenData.distIndex = poolData.latestDistIndex++;
 
             poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _ctx);
 
-            console.log("Index created");
-
             IERC20(_underlyingToken).safeIncreaseAllowance(
                 poolData.poolLogic,
                 type(uint256).max
             );
-
-            IERC20(_underlyingToken).safeIncreaseAllowance(
-                address(poolData.DHPTx),
-                type(uint256).max
-            );
         }
 
-        console.log("Exited supertoken mapping");
-
-        _newCtx = _superToken.updateShares(
+        _newCtx = _superToken.updateSharesInCallback(
             poolData.DHPTx,
             tokenData.distIndex,
             _ctx
         );
-
-        console.log("Exited afterAgreementCreated");
     }
 
     function beforeAgreementUpdated(
@@ -327,7 +341,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyExpected(_agreementClass);
         _onlyActive();
 
-        _cbdata = _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
+        _cbdata = _beforeAgreement(_agreementClass, _superToken.getUnderlyingToken(), _ctx);
     }
 
     function afterAgreementUpdated(
@@ -342,9 +356,10 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyExpected(_agreementClass);
 
         _newCtx = _afterAgreement(
+            _agreementClass,
+            _superToken.getUnderlyingToken(),
             _ctx,
-            _cbdata,
-            _superToken.getUnderlyingToken()
+            _cbdata
         );
     }
 
@@ -358,7 +373,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _cbdata = _beforeAgreement(_ctx, _superToken.getUnderlyingToken());
+        _cbdata = _beforeAgreement(_agreementClass, _superToken.getUnderlyingToken(), _ctx);
     }
 
     function afterAgreementTerminated(
@@ -373,9 +388,10 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyExpected(_agreementClass);
 
         _newCtx = _afterAgreement(
+            _agreementClass,
+            _superToken.getUnderlyingToken(),
             _ctx,
-            _cbdata,
-            _superToken.getUnderlyingToken()
+            _cbdata
         );
     }
 }

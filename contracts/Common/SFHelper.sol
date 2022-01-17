@@ -25,55 +25,21 @@ library SFHelper {
             0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
         );
 
-    function createIndex(
-        ISuperToken _superToken,
-        uint32 _index
-    ) external returns (bytes memory _newCtx) {
-        // (_newCtx, ) = HOST.callAgreementWithContext(
-        //     IDA_V1,
-        //     abi.encodeWithSelector(
-        //         IDA_V1.createIndex.selector,
-        //         _superToken,
-        //         _index,
-        //         _ctx
-        //     ),
-        //     new bytes(0), // user data
-        //     _ctx
-        // );
-        try HOST.callAgreement(
-            IDA_V1,
-            abi.encodeWithSelector(
-                IDA_V1.createIndex.selector,
-                _superToken,
-                _index,
-                new bytes(0)
-            ),
-            new bytes(0) // user data
-        ) returns (bytes memory _tempCtx) {
-            _newCtx = _tempCtx;
-        } catch (bytes memory _errorData) {
-            console.log("Faced an error: ");
-            console.logBytes(_errorData);
-        }
-    }
-
-    function createIndexInCallback(
-        ISuperToken _superToken,
-        uint32 _index,
-        bytes memory _ctx
-    ) external returns (bytes memory _newCtx) {
-        (_newCtx, ) = HOST.callAgreementWithContext(
-            IDA_V1, 
-            abi.encodeWithSelector(
-                IDA_V1.createIndex.selector,
-                _superToken,
-                _index,
-                new bytes (0) // placeholder ctx
-            ),
-            new bytes(0), // userData
-            _ctx
-        );
-    }
+    // function createIndex(
+    //     ISuperToken _superToken,
+    //     uint32 _index
+    // ) external returns (bytes memory _newCtx) {
+    //     _newCtx = HOST.callAgreement(
+    //         IDA_V1,
+    //         abi.encodeWithSelector(
+    //             IDA_V1.createIndex.selector,
+    //             _superToken,
+    //             _index,
+    //             new bytes(0)
+    //         ),
+    //         new bytes(0) // user data
+    //     );
+    // }
 
     function distribute(
         ISuperToken _superToken,
@@ -102,7 +68,25 @@ library SFHelper {
         );
     }
 
-    function updateShares(
+    function createIndexInCallback(
+        ISuperToken _superToken,
+        uint32 _index,
+        bytes calldata _ctx
+    ) external returns (bytes memory _newCtx) {
+        (_newCtx, ) = HOST.callAgreementWithContext(
+            IDA_V1,
+            abi.encodeWithSelector(
+                IDA_V1.createIndex.selector,
+                _superToken,
+                _index,
+                new bytes(0) // placeholder ctx
+            ),
+            new bytes(0), // userData
+            _ctx
+        );
+    }
+
+    function updateSharesInCallback(
         ISuperToken _superStreamToken,
         ISuperToken _superDistToken,
         uint32 _index,
@@ -172,5 +156,7 @@ library SFHelper {
             _sender,
             address(this)
         );
+
+        console.log("Timestamp: %s, Flow rate: %s", _timestamp, uint256(uint96(_flowRate)));
     }
 }
