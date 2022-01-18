@@ -5,7 +5,7 @@ const { parseUnits } = require("@ethersproject/units");
 const SuperfluidSDK = require("@superfluid-finance/sdk-core");
 const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
 const dHEDGEPoolLogic = require("@dhedge/v2-sdk/src/abi/PoolLogic.json");
-const dHEDGEPoolFactory = require("../../helpers/PoolFactoryABI.json");
+const dHEDGEPoolFactory = require("@dhedge/v2-sdk/src/abi/PoolFactory.json");
 const {
     getBigNumber,
     getTimeStamp,
@@ -53,7 +53,7 @@ describe("dHedgeCore Math Testing", function () {
     // Supports USDC only
     const Pool2 = "0x65bb99e80a863e0e27ee6d09c794ed8c0be47186";
 
-    const [admin] = provider.getWallets();
+    const [admin, DAO] = provider.getWallets();
     const ethersProvider = provider;
 
     let sf, host;
@@ -64,7 +64,7 @@ describe("dHedgeCore Math Testing", function () {
     let app, DHPT;
 
     before(async () => {
-        [USDCWhale, DAIWhale, DAIWhale2, AssetHandler] = await impersonateAccounts([
+        [USDCWhale, DAIWhale, DAIWhale2, dHEDGEOwner] = await impersonateAccounts([
             USDCWhaleAddr,
             DAIWhaleAddr,
             DAIWhaleAddr2,
@@ -72,8 +72,6 @@ describe("dHedgeCore Math Testing", function () {
         ]);
         DAIContract = await ethers.getContractAt("IERC20", DAI.token);
         USDCContract = await ethers.getContractAt("IERC20", USDC.token);
-
-        // mockPoolLogic = await deployMockContract(admin, dHEDGEPoolLogic.abi);
 
         sf = await SuperfluidSDK.Framework.create({
             networkName: "hardhat",
@@ -89,7 +87,7 @@ describe("dHedgeCore Math Testing", function () {
         DAIx = await sf.loadSuperToken(DAI.superToken);
 
         DHPTxAddr = await createSuperToken(Pool1);
-        DHPTx = await ethers.getContractAt("IERC20", DHPTxAddr);
+        DHPTx = await sf.loadSuperToken(DHPTxAddr);
         DHPT = await ethers.getContractAt("IERC20", Pool1);
 
         SFHelperFactory = await ethers.getContractFactory("SFHelper");
@@ -113,28 +111,11 @@ describe("dHedgeCore Math Testing", function () {
             "function owner() external view returns (address)"
         ];
 
-        // PoolFactory = await ethers.getContractAt(JSON.parse(dHEDGEPoolFactory.result), "0xfb185b8A62F7b888755FBB3E3772F9bf33955211");
-        // tx = await PoolFactory.createFund(
-        //     false,
-        //     admin.address,
-        //     "Admin",
-        //     "dSIP",
-        //     "DSIP",
-        //     getBigNumber(5000),
-        //     [
-        //         [USDC.token, true],
-        //         [DAI.token, true]
-        //     ]
-        // );
-
-        // console.log("Pool creation transaction: ", tx);
-
-        // process.exit(0);
-
         AssetHandlerContract = await ethers.getContractAt(AssetHandlerABI, "0x760FE3179c8491f4b75b21A81F3eE4a5D616A28a");
-        console.log("Current AssetHandler owner: ", (await AssetHandlerContract.owner()));
-        await AssetHandlerContract.connect(AssetHandler).setChainlinkTimeout(getSeconds(500).toString());
+        await AssetHandlerContract.connect(dHEDGEOwner).setChainlinkTimeout(getSeconds(500).toString());
 
+        PoolFactoryContract = await ethers.getContractAt(dHEDGEPoolFactory.abi, "0xfdc7b8bFe0DD3513Cc669bB8d601Cb83e2F69cB0");
+        await PoolFactoryContract.connect(dHEDGEOwner).setExitCooldown(constants.Zero);
     });
 
     async function setupEnv() {
@@ -154,14 +135,9 @@ describe("dHedgeCore Math Testing", function () {
             regKey
         );
 
-        // app = await dHedgeCoreFactory.deploy(
-        //     mockPoolLogic.address,
-        //     DHPTx.address,
-        //     "20000",
-        //     regKey
-        // );
-
         await app.deployed();
+
+        await app.connect(admin).transferOwnership(DAO.address);
 
         await approveAndUpgrade();
     }
@@ -202,13 +178,13 @@ describe("dHedgeCore Math Testing", function () {
     }
 
     async function startAndSub(wallet, superToken, userFlowRate) {
-        distIndex = await app.getLatestDistIndex();
-
         createFlowOp = sf.cfaV1.createFlow({
             superToken: superToken,
             receiver: app.address,
             flowRate: userFlowRate
         });
+
+        distIndex = await app.getTokenDistIndex(USDCContract.address);
 
         approveOp = sf.idaV1.approveSubscription({
             indexId: distIndex.toString(),
@@ -375,19 +351,14 @@ describe("dHedgeCore Math Testing", function () {
         expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
     });
 
-    it.skip("Should be able to calculate uninvested amount correctly - 2", async () => {
+    it("Should be able to calculate uninvested amount correctly - 2", async () => {
         await loadFixture(setupEnv);
 
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
         await startAndSub(USDCWhale, USDC.superToken, userFlowRate);
 
-        console.log("Reaching here 2");
-
         await increaseTime(getSeconds(1));
-
-        // await mockPoolLogic.mock.poolManagerLogic.returns("0x2022ae924ce6f6d23581ef8e3dcfbb69ee719fed");
-        // await mockPoolLogic.mock.deposit.returns(parseUnits("3", 18));
 
         await app.dHedgeDeposit(USDCContract.address);
 
@@ -408,7 +379,6 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(1));
 
-        // await mockPoolLogic.mock.deposit.returns(parseUnits("2", 18));
         await app.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(1));
@@ -440,7 +410,6 @@ describe("dHedgeCore Math Testing", function () {
 
         await increaseTime(getSeconds(1));
 
-        // await mockPoolLogic.mock.deposit.returns(parseUnits("1", 18));
         await app.dHedgeDeposit(USDCContract.address);
 
         await increaseTime(getSeconds(1));
@@ -587,784 +556,206 @@ describe("dHedgeCore Math Testing", function () {
         expect(currUninvestedDAI).to.be.closeTo(constants.Zero, parseUnits("1", 18));
     });
 
-    //     it("Should be able to calculate a user's share correctly (single-token)", async () => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
-
-    //         console.log("USDCx balance of the app before update: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-    //         console.log("USDCx balance of the app after update: ", (await USDCx.balanceOf(app.address)).toString());
-    //         console.log("User uninvested amount after update: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
-
-    //         console.log("USDCx balance of the app before deletion: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-    //         console.log("USDCx balance of the app after deletion: ", (await USDCx.balanceOf(app.address)).toString());
-    //         console.log("User uninvested amount after deletion: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
-
-    //         console.log("USDCx balance of the app before creation: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-    //         console.log("USDCx balance of the app after creation: ", (await USDCx.balanceOf(app.address)).toString());
-    //         console.log("User uninvested amount after creation: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await printLPBalances();
-    //         console.log("USDCx balance of the app: ", (await USDCx.balanceOf(app.address)).toString());
-    //         console.log("Current user uninvested amount: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-    //     });
-
-    //     it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a DAI flow"
-    //         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
+    it("Should be able to calculate a user's share correctly (single-token)", async () => {
+        await loadFixture(setupEnv);
 
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
+        userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
+        await startAndSub(admin, USDC.superToken, userFlowRate);
 
-    //         await increaseTime(getSeconds(30));
+        await increaseTime(getSeconds(30));
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
+        await printDHPTxBalance(admin.address);
 
-    //         await sf.cfa.deleteFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         await increaseTime(getSeconds(30));
+        userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(admin.address);
-    //         await printLPBalances();
-
-
-    //         await sf.cfa.createFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await printLPBalances();
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(admin.address);
-
-    //     });
-
-    //     it("Should be able to calculate a user's share correctly (multi-user-single-token)", async () => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDCx flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "USDCWhale starting a USDCx flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: USDCWhale.address });
+        await sf.cfaV1.updateFlow({
+            superToken: USDC.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(admin);
 
-    //         await increaseTime(getSeconds(30));
+        await increaseTime(getSeconds(30));
 
-    //         await app.dHedgeDeposit(USDCContract.address);
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(USDCWhale.address);
-    //         await printLPBalances();
+        await printDHPTxBalance(admin.address);
 
+        await sf.cfaV1.deleteFlow({
+            superToken: USDC.superToken,
+            sender: admin.address,
+            receiver: app.address
+        }).exec(admin);
 
-    //         console.log("USDCx balance of the app before updation: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
+        await increaseTime(getSeconds(30));
 
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: USDCWhale.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-    //         console.log("USDCx balance of the app after updation: ", (await USDCx.balanceOf(app.address)).toString());
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await increaseTime(getSeconds(30));
+        await printDHPTxBalance(admin.address);
+    });
 
-    //         await app.dHedgeDeposit(USDCContract.address);
+    it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
+        await loadFixture(setupEnv);
 
-    //         await printLPBalances();
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(USDCWhale.address);
+        userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    //         console.log("USDCx balance of the app before deletion: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
+        await startAndSub(admin, USDC.superToken, userFlowRate);
+        await startAndSub(admin, DAI.superToken, userFlowRate);
 
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: USDCWhale.address,
-    //             receiver: app.address,
-    //             by: USDCWhale.address
-    //         });
-    //         console.log("USDCx balance of the app after deletion: ", (await USDCx.balanceOf(app.address)).toString());
+        await increaseTime(getSeconds(30));
 
-    //         await increaseTime(getSeconds(30));
+        await app.dHedgeDeposit(DAIContract.address);
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await app.dHedgeDeposit(USDCContract.address);
+        await printDHPTxBalance(admin.address);
 
-    //         await printLPBalances();
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(USDCWhale.address);
+        userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
-    //         console.log("USDCx balance of the app before creation: ", (await USDCx.balanceOf(app.address)).toString());
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
+        await sf.cfaV1.updateFlow({
+            superToken: USDC.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(admin);
 
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: USDCWhale.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-    //         console.log("USDCx balance of the app after creation: ", (await USDCx.balanceOf(app.address)).toString());
+        await sf.cfaV1.updateFlow({
+            superToken: DAI.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(admin);
 
-    //         await increaseTime(getSeconds(30));
+        await increaseTime(getSeconds(30));
 
-    //         await app.dHedgeDeposit(USDCContract.address);
+        await app.dHedgeDeposit(DAIContract.address);
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await increaseTime(getSeconds(1));
+        await printDHPTxBalance(admin.address);
 
-    //         await app.calcWithdrawable(admin.address);
-    //         await app.calcWithdrawable(USDCWhale.address);
-    //         await printLPBalances();
-    //     });
+        await sf.cfaV1.deleteFlow({
+            superToken: USDC.superToken,
+            sender: admin.address,
+            receiver: app.address
+        }).exec(admin);
 
-    //     it("Should be able to calculate amounts correctly after withdrawal of uninvested amount (single-token)", async () => {
-    //         await loadFixture(deployContracts);
+        await sf.cfaV1.deleteFlow({
+            superToken: DAI.superToken,
+            sender: admin.address,
+            receiver: app.address
+        }).exec(admin);
 
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a DAI flow"
-    //         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
+        await increaseTime(getSeconds(30));
 
-    //         await increaseTime(getSeconds(30));
+        await app.dHedgeDeposit(DAIContract.address);
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await app.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("30", 18));
+        await printDHPTxBalance(admin.address);
+    });
 
-    //         await increaseTime(getSeconds(5));
+    it("should be able to calculate a user's share correctly (multi-user-single-token)", async () => {
+        await loadFixture(setupEnv);
 
-    //         await app.dHedgeDeposit(DAIContract.address);
+        userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
+        await startAndSub(admin, USDC.superToken, userFlowRate);
+        await startAndSub(USDCWhale, USDC.superToken, userFlowRate);
 
-    //         await increaseTime(getSeconds(30));
+        await increaseTime(getSeconds(30));
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         // await app.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("165", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
+        await printDHPTxBalance(admin.address);
+        await printDHPTxBalance(USDCWhale.address);
 
-    //         await sf.cfa.updateFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
+        userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
-    //         await increaseTime(getSeconds(30));
+        await sf.cfaV1.updateFlow({
+            superToken: USDC.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(admin);
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await increaseTime(getSeconds(5));
-    //         await app.moveLPT();
+        await sf.cfaV1.updateFlow({
+            superToken: USDC.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(USDCWhale);
 
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
+        await increaseTime(getSeconds(30));
 
-    //         await sf.cfa.deleteFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
+        await printDHPTxBalance(admin.address);
+        await printDHPTxBalance(USDCWhale.address);
 
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
+        await sf.cfaV1.deleteFlow({
+            superToken: USDC.superToken,
+            sender: admin.address,
+            receiver: app.address
+        }).exec(admin);
 
-    //         await app.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("10", 18));
+        await sf.cfaV1.deleteFlow({
+            superToken: USDC.superToken,
+            sender: USDCWhale.address,
+            receiver: app.address
+        }).exec(USDCWhale);
 
-    //         console.log("User uninvested amount: ", (await app.calcUserUninvested(admin.address, DAIContract.address)).toString());
+        await increaseTime(getSeconds(30));
 
-    //         await increaseTime(getSeconds(1));
+        await app.dHedgeDeposit(USDCContract.address);
 
-    //         await sf.cfa.createFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
+        await printDHPTxBalance(admin.address);
+        await printDHPTxBalance(USDCWhale.address);
+    });
 
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
+    it.only("should return uninvested amount after stream updation/termination", async () => {
+        await loadFixture(setupEnv);
 
-    //         await increaseTime(getSeconds(30));
+        userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
+        await startAndSub(admin, USDC.superToken, userFlowRate);
 
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         console.log("Uninvested amount left: ", (await app.calcUserUninvested(admin.address, DAIContract.address)).toString());
-    //         console.log("Withdrawable amount left: ", (await app.calcWithdrawable(admin.address)).toString());
-    //     });
+        await increaseTime(getSeconds(1));
+        
+        balanceBefore = await USDCx.balanceOf({
+            account: admin.address,
+            providerOrSigner: ethersProvider
+        });
 
-    //     it("Should be able to calculate amounts correctly after withdrawal of uninvested amount (multi-token)", async () => {
-    //         await loadFixture(deployContracts);
+        userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a DAI flow"
-    //         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
+        await sf.cfaV1.updateFlow({
+            superToken: USDC.superToken,
+            receiver: app.address,
+            flowRate: userFlowRate
+        }).exec(admin);
 
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
+        balanceAfter = await USDCx.balanceOf({
+            account: admin.address,
+            providerOrSigner: ethersProvider
+        });
 
-    //         await increaseTime(getSeconds(30));
+        expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(parseUnits("3", 18), parseUnits("1", 18));
 
-    //         await app.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("30", 18));
-    //         await app.connect(admin).withdrawUninvestedSingle(USDCContract.address, parseUnits("30", 18));
+        await increaseTime(getSeconds(1));
 
-    //         await increaseTime(getSeconds(5));
+        balanceBefore = await USDCx.balanceOf({
+            account: admin.address,
+            providerOrSigner: ethersProvider
+        });
+        
+        await sf.cfaV1.deleteFlow({
+            superToken: USDC.superToken,
+            sender: admin.address,
+            receiver: app.address
+        }).exec(admin);
 
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
+        balanceAfter = await USDCx.balanceOf({
+            account: admin.address,
+            providerOrSigner: ethersProvider
+        });
 
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await increaseTime(getSeconds(5));
-    //         await app.moveLPT();
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-
-    //         await app.connect(admin).withdrawUninvestedSingle(DAIContract.address, parseUnits("10", 18));
-    //         await app.connect(admin).withdrawUninvestedSingle(USDCContract.address, parseUnits("10", 18));
-
-    //         console.log("User uninvested amount: ", (await app.calcUserUninvested(admin.address, DAIContract.address)).toString());
-    //         console.log("User uninvested amount: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-
-    //         await increaseTime(getSeconds(1));
-
-    //         await sf.cfa.createFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         console.log("Uninvested amount of DAIx left: ", (await app.calcUserUninvested(admin.address, DAIContract.address)).toString());
-    //         console.log("Uninvested amount of USDCx left: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-    //         console.log("Withdrawable amount left: ", (await app.calcWithdrawable(admin.address)).toString());
-    //         console.log("Current LP tokens balance of app: ", (await coreToken.balanceOf(bank.address)).toString());
-    //     });
-
-    //     it("Should be able to withdraw all the uninvested amount of tokens", async () => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a DAI flow"
-    //         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.connect(admin).withdrawUninvestedAll();
-
-    //         await increaseTime(getSeconds(5));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await increaseTime(getSeconds(5));
-    //         await app.moveLPT();
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(parseUnits("10", 18), parseUnits("1", 18));
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("0.01", 18));
-
-    //         await app.withdrawUninvestedAll();
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(1));
-
-    //         await sf.cfa.createFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         expect(await app.calcUserUninvested(admin.address, DAIContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-    //         expect(await app.calcUserUninvested(admin.address, USDCContract.address)).to.be.closeTo(ethers.constants.Zero, parseUnits("1", 18));
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         console.log("Uninvested amount of DAIx left: ", (await app.calcUserUninvested(admin.address, DAIContract.address)).toString());
-    //         console.log("Uninvested amount of USDCx left: ", (await app.calcUserUninvested(admin.address, USDCContract.address)).toString());
-    //         console.log("Withdrawable amount left: ", (await app.calcWithdrawable(admin.address)).toString());
-    //         console.log("Current LP tokens balance of bank: ", (await coreToken.balanceOf(bank.address)).toString());
-    //     });
-
-    //     it.skip("Should be able to withdraw LP tokens", async () => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a DAI flow"
-    //         )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "90", USDCx.address), { from: admin.address });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.equal(constants.Zero);
-
-    //         // Mandatory for withdrawing tokens (cooldown ends)
-    //         await increaseTime(getSeconds(1));
-    //         await app.moveLPT();
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-
-    //         expect(currLPBalanceCore).to.equal(constants.Zero);
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-
-    //         await app.connect(admin).dHedgeWithdraw(currLPBalanceBank.div(4));
-
-    //         expect(await coreToken.balanceOf(admin.address)).to.be.closeTo(currLPBalanceBank.div(4), parseUnits("1", 18));
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank.mul(3).div(4), parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await printLPBalances();
-
-    //         await increaseTime(getSeconds(1));
-    //         await app.moveLPT();
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-
-    //         await app.connect(admin).dHedgeWithdraw(currLPBalanceBank.mul(3).div(4));
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank.div(4), parseUnits("1", 18));
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-
-    //         // await app.connect(admin).dHedgeWithdraw(constants.MaxUint256);
-    //         // expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(1));
-
-    //         await sf.cfa.createFlow({
-    //             superToken: DAIx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await sf.cfa.createFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("30", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         await increaseTime(getSeconds(30));
-
-    //         await app.dHedgeDeposit(DAIContract.address);
-    //         await app.dHedgeDeposit(USDCContract.address);
-
-    //         await increaseTime(getSeconds(1));
-    //         await app.moveLPT();
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         console.log("Withdrawable amount left: ", (await app.calcWithdrawable(admin.address)).toString());
-    //     });
-
-    //     it.only("Should calculate LP share amount correctly", async() => {
-    //         await loadFixture(deployContracts);
-
-    //         await web3tx(
-    //             sf.host.batchCall,
-    //             "Admin starting a USDC flow"
-    //         )(createBatchCall("1000", "30", USDCx.address), { from: admin.address });
-
-    //         // await web3tx(
-    //         //     sf.host.batchCall,
-    //         //     "Admin starting a DAI flow"
-    //         // )(createBatchCall("1000", "90", DAIx.address), { from: admin.address });
-
-    //         await increaseTime(getSeconds(1));
-    //         await app.dHedgeDeposit(USDCContract.address);
-    //         // await app.dHedgeDeposit(DAIContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcWithdrawable(admin.address)).to.equal(constants.Zero);
-
-    //         await increaseTime(60*60*2);
-    //         console.log("Withdrawable: ", (await app.calcWithdrawable(admin.address)).toString());
-
-    //         await increaseTime(getSeconds(1));
-    //         await app.dHedgeDeposit(USDCContract.address);
-    //         // await app.dHedgeDeposit(DAIContract.address);
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-
-    //         await increaseTime(60*60*2);
-    //         console.log("Withdrawable: ", (await app.calcWithdrawable(admin.address)).toString());
-
-    //         await sf.cfa.updateFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
-    //         });
-
-    //         // await sf.cfa.updateFlow({
-    //         //     superToken: DAIx.address,
-    //         //     sender: admin.address,
-    //         //     receiver: app.address,
-    //         //     flowRate: parseUnits("20", 18).div(getBigNumber(getSeconds(30)))
-    //         // });
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect(await app.calcUserLockedShareAmount(admin.address)).to.be.closeTo(currLPBalanceCore, parseUnits("1", 18));
-    //         expect(await app.calcWithdrawable(admin.address)).to.be.closeTo(currLPBalanceBank, parseUnits("1", 18));
-
-    //         await increaseTime(getSeconds(1));
-
-    //         expect((await app.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank.add(currLPBalanceCore), parseUnits("1", 18));
-    //         expect(await app.calcUserLockedShareAmount(admin.address)).to.equal(constants.Zero);
-
-    //         await sf.cfa.deleteFlow({
-    //             superToken: USDCx.address,
-    //             sender: admin.address,
-    //             receiver: app.address,
-    //             by: admin.address
-    //         });
-
-    //         // await sf.cfa.deleteFlow({
-    //         //     superToken: DAIx.address,
-    //         //     sender: admin.address,
-    //         //     receiver: app.address,
-    //         //     by: admin.address
-    //         // });
-
-    //         [currLPBalanceCore, currLPBalanceBank] = await printLPBalances();
-    //         expect((await app.calcWithdrawable(admin.address)).toString()).to.be.closeTo(currLPBalanceBank.add(currLPBalanceCore), parseUnits("1", 18));
-    //         expect(await app.calcUserLockedShareAmount(admin.address)).to.be.closeTo(constants.Zero, parseUnits("0.1", 18));
-    //     });
+        expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(parseUnits("2", 18), parseUnits("1", 18));
+    });
 });
 

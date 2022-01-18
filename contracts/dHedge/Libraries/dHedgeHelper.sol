@@ -104,7 +104,6 @@ library dHedgeHelper {
                 //     "dHedgeHelper: Fee transfer failed"
                 // );
 
-
                 // Deposit the tokens into the dHedge pool
                 uint256 _liquidityMinted = _poolLogic.deposit(
                     _depositToken,
@@ -118,6 +117,12 @@ library dHedgeHelper {
                 _dHedgePool.DHPTx.distribute(
                     tokenData.distIndex,
                     _dHedgePool.DHPTx.balanceOf(address(this))
+                );
+
+                console.log(
+                    "Liquidity minted for token %s: %s",
+                    _depositToken,
+                    _liquidityMinted
                 );
             }
         }
@@ -136,34 +141,35 @@ library dHedgeHelper {
         view
         returns (bool _reqUpkeep, address _depositToken)
     {
-        IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
-        IPoolManagerLogic _supportLogic = IPoolManagerLogic(
-            _poolLogic.poolManagerLogic()
-        );
+        if (_dHedgePool.isActive) {
+            IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
+            IPoolManagerLogic _supportLogic = IPoolManagerLogic(
+                _poolLogic.poolManagerLogic()
+            );
 
-        // Get assets currently supported by the dHedge pool
-        address[] memory _depositAssets = _supportLogic.getDepositAssets();
+            // Get assets currently supported by the dHedge pool
+            address[] memory _depositAssets = _supportLogic.getDepositAssets();
 
-        for (uint8 i = 0; i < _depositAssets.length; ++i) {
-            _depositToken = _depositAssets[i];
-            dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
-                _depositToken
-            ];
+            for (uint8 i = 0; i < _depositAssets.length; ++i) {
+                _depositToken = _depositAssets[i];
+                dHedgeStorage.TokenData storage tokenData = _dHedgePool
+                    .tokenData[_depositToken];
 
-            // If supertoken for an underlying token exists then proceed with the deposit
-            if (
-                address(tokenData.superToken) != address(0) &&
-                (block.timestamp - tokenData.lastDepositAt) >= 24 hours
-            ) {
-                uint256 _depositBalance = tokenData.superToken.balanceOf(
-                    address(this)
-                ) / (10**(18 - IERC20Mod(_depositToken).decimals()));
+                // If supertoken for an underlying token exists then proceed with the deposit
+                if (
+                    address(tokenData.superToken) != address(0) &&
+                    (block.timestamp - tokenData.lastDepositAt) >= 24 hours
+                ) {
+                    uint256 _depositBalance = tokenData.superToken.balanceOf(
+                        address(this)
+                    ) / (10**(18 - IERC20Mod(_depositToken).decimals()));
 
-                (_depositBalance > 0) ? _reqUpkeep = true : _reqUpkeep = false;
-
-                break;
+                    if (_depositBalance > 0) return (true, _depositToken);
+                }
             }
         }
+
+        return (false, address(0));
     }
 
     function calcUserUninvested(
@@ -171,7 +177,9 @@ library dHedgeHelper {
         address _user,
         address _depositToken
     ) public view returns (uint256 _userUninvested) {
-        dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[_depositToken];
+        dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
+            _depositToken
+        ];
         _userUninvested = tokenData.superToken.calcUserUninvested(
             _user,
             tokenData.lastDepositAt
@@ -192,7 +200,7 @@ library dHedgeHelper {
         IPoolManagerLogic _supportLogic = IPoolManagerLogic(
             _poolLogic.poolManagerLogic()
         );
-        
+
         return _supportLogic.isDepositAsset(_token);
     }
 }

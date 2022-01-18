@@ -31,7 +31,7 @@ require("./tasks/dHedge/DeactivateCore");
       },
       blockGasLimit: 20000000,
       gasPrice: 30000000000,
-      accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
+      // accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
       saveDeployments: false
     },
     polygon :{

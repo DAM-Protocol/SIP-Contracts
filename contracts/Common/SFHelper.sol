@@ -66,6 +66,8 @@ library SFHelper {
             ),
             new bytes(0)
         );
+
+        console.log("Actual amount distributed: %s", _actualAmount);
     }
 
     function createIndexInCallback(
@@ -156,7 +158,5 @@ library SFHelper {
             _sender,
             address(this)
         );
-
-        console.log("Timestamp: %s, Flow rate: %s", _timestamp, uint256(uint96(_flowRate)));
     }
 }

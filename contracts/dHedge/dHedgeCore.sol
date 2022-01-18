@@ -154,7 +154,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /// @dev Checks if deposit action can be performed
     /// @return Boolean indicating if upkeep/deposit can be performed
     function requireUpkeep() public view returns (bool, address) {
-        _onlyActive();
         return poolData.requireUpkeep();
     }
 
