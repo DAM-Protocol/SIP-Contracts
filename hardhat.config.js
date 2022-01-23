@@ -42,8 +42,9 @@ require("./tasks/dHedge/DeactivateCore");
     }
   },
   gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
+    enabled: true,
     currency: "USD",
+    gasPrice: 100 // Set to 100 GWei
   },
   etherscan: {
     apiKey: process.env.POLYGONSCAN_KEY,

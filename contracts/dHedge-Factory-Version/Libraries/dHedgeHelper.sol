@@ -92,7 +92,7 @@ library dHedgeHelper {
 
                 // Transfer the fees collected to the owner
                 IERC20(_depositToken).safeTransfer(
-                    Ownable(address(this)).owner(),
+                    Ownable(_dHedgePool.factory).owner(),
                     _feeCollected
                 );
 
@@ -123,6 +123,12 @@ library dHedgeHelper {
                     "Liquidity minted for token %s: %s",
                     _depositToken,
                     _liquidityMinted
+                );
+
+                console.log(
+                    "Fee collected for token %s: %s",
+                    _depositToken,
+                    _feeCollected
                 );
             }
         }

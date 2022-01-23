@@ -26,15 +26,11 @@ library dHedgeStorage {
     }
 
     /**
-     * @notice Data related to lending of a token.
-     * @param host Superfluid host contract.
-     * @param cfa Superfluid constant flow agreement class address.
-     * @param ida Superfluid instant distribution agreement class address.
+     * @notice Struct containing data related to a dHEDGE pool and it's corresponding core contract.
      * @param DHPTx DHP super token for a dHEDGE pool.
      * @param isActive Status of contract representing a dHedge pool.
      * @param poolLogic Address of a dHEDGE pool.
      * @param feeRate Fee percentage with 6 decimals.
-     * @param lastDepositTime Last time a deposit action took place in the pool. Useful to limit the time difference
      * between deposits in order to guard against perpetual cooldown issues
      * @param tokenData Contains data regarding a market (a token)
      * @dev Another variable called `lastDistributeAt` may be required.
@@ -42,6 +38,7 @@ library dHedgeStorage {
     struct dHedgePool {
         bool isActive;
         ISuperToken DHPTx; 
+        address factory;
         address poolLogic;
         uint32 latestDistIndex;
         uint32 feeRate;

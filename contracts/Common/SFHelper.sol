@@ -4,8 +4,6 @@ pragma solidity ^0.8.4;
 import {ISuperfluid, ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "hardhat/console.sol";
 
 /**
@@ -24,22 +22,7 @@ library SFHelper {
         IInstantDistributionAgreementV1(
             0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
         );
-
-    // function createIndex(
-    //     ISuperToken _superToken,
-    //     uint32 _index
-    // ) external returns (bytes memory _newCtx) {
-    //     _newCtx = HOST.callAgreement(
-    //         IDA_V1,
-    //         abi.encodeWithSelector(
-    //             IDA_V1.createIndex.selector,
-    //             _superToken,
-    //             _index,
-    //             new bytes(0)
-    //         ),
-    //         new bytes(0) // user data
-    //     );
-    // }
+        
 
     function distribute(
         ISuperToken _superToken,

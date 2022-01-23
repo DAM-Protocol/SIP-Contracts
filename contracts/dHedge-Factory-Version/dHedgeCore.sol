@@ -5,6 +5,7 @@ import {ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions} from "@s
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
@@ -20,32 +21,28 @@ import "hardhat/console.sol";
 // solhint-disable reason-string
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
-contract dHedgeCore is Ownable, SuperAppBase {
+contract dHedgeCore is Initializable, SuperAppBase {
     using SafeERC20 for IERC20;
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
 
     dHedgeStorage.dHedgePool private poolData;
 
-    constructor(
+    /// @dev Initialize the factory
+    /// @param _dHedgePool dHEDGE pool contract address
+    /// @param _DHPTx Supertoken corresponding to the DHPT of the pool
+    /// @param _feeRate Fee rate for collecting streaming fees scaled to 1e6
+    function initialize(
         address _dHedgePool,
         ISuperToken _DHPTx,
-        uint32 _feeRate,
-        string memory _regKey
-    ) {
+        uint32 _feeRate
+    ) external initializer {
         poolData.isActive = true;
+        poolData.factory = msg.sender;
         poolData.DHPTx = _DHPTx;
         poolData.poolLogic = _dHedgePool;
         poolData.feeRate = _feeRate;
 
-        // NOTE: configword is used to omit the specific agreement hooks (NOOP - Not Operate)
-        uint256 _configWord = SuperAppDefinitions.APP_LEVEL_FINAL;
-
-        (bytes(_regKey).length == 0)
-            ? SFHelper.HOST.registerApp(_configWord)
-            : SFHelper.HOST.registerAppWithKey(_configWord, _regKey);
-
-        // Note: Disable when running tests with mock
         IERC20(_dHedgePool).safeIncreaseAllowance(
             address(_DHPTx),
             type(uint256).max
@@ -55,36 +52,6 @@ contract dHedgeCore is Ownable, SuperAppBase {
     /**************************************************************************
      * Core functions
      *************************************************************************/
-
-    // function addSuperTokenAndIndex(ISuperToken _superToken) external {
-    //     _onlyOwner(msg.sender);
-    //     address _underlyingToken = _superToken.getUnderlyingToken();
-    //     dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
-    //         _underlyingToken
-    //     ];
-
-    //     require(
-    //         address(tokenData.superToken) == address(0),
-    //         "dHedgeCore: Supertoken already mapped"
-    //     );
-
-    //     tokenData.superToken = _superToken;
-    //     tokenData.distIndex = poolData.latestDistIndex++;
-
-    //     poolData.DHPTx.createIndex(tokenData.distIndex);
-
-    //     console.log("Index created");
-
-    //     IERC20(_underlyingToken).safeIncreaseAllowance(
-    //         poolData.poolLogic,
-    //         type(uint256).max
-    //     );
-
-    //     IERC20(_underlyingToken).safeIncreaseAllowance(
-    //         address(poolData.DHPTx),
-    //         type(uint256).max
-    //     );
-    // }
 
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
@@ -99,7 +66,7 @@ contract dHedgeCore is Ownable, SuperAppBase {
     function emergencyWithdraw(address _token) external {
         _onlyOwner(msg.sender);
         IERC20(_token).safeTransfer(
-            owner(),
+            Ownable(poolData.factory).owner(),
             IERC20(_token).balanceOf(address(this))
         );
     }
@@ -135,8 +102,15 @@ contract dHedgeCore is Ownable, SuperAppBase {
         return poolData.latestDistIndex;
     }
 
-    function getTokenDistIndex(address _token) external view returns (uint32) {
-        return poolData.tokenData[_token].distIndex;
+    function getTokenDistIndex(address _token)
+        external
+        view
+        returns (bool, uint32)
+    {
+        if (address(poolData.tokenData[_token].superToken) != address(0))
+            return (true, poolData.tokenData[_token].distIndex);
+
+        return (false, 0);
     }
 
     /// @notice Calculates uninvested token amount of a particular user
@@ -227,7 +201,10 @@ contract dHedgeCore is Ownable, SuperAppBase {
 
     /// @dev Equivalent to onlyOwner modifier
     function _onlyOwner(address _user) internal view {
-        require(_user == owner(), "dHedgeCore: Not the owner");
+        require(
+            _user == Ownable(poolData.factory).owner(),
+            "dHedgeCore: Not the owner"
+        );
     }
 
     /// @dev Checks if the caller is the SF host contract
@@ -314,6 +291,12 @@ contract dHedgeCore is Ownable, SuperAppBase {
             tokenData.superToken = _superToken;
             tokenData.distIndex = poolData.latestDistIndex++;
 
+            console.log(
+                "Index for token %s: %s",
+                _underlyingToken,
+                tokenData.distIndex
+            );
+
             poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _ctx);
 
             IERC20(_underlyingToken).safeIncreaseAllowance(
@@ -327,6 +310,8 @@ contract dHedgeCore is Ownable, SuperAppBase {
             tokenData.distIndex,
             _ctx
         );
+
+        console.log("Latest index: %s", poolData.latestDistIndex);
     }
 
     function beforeAgreementUpdated(
@@ -340,7 +325,11 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyExpected(_agreementClass);
         _onlyActive();
 
-        _cbdata = _beforeAgreement(_agreementClass, _superToken.getUnderlyingToken(), _ctx);
+        _cbdata = _beforeAgreement(
+            _agreementClass,
+            _superToken.getUnderlyingToken(),
+            _ctx
+        );
     }
 
     function afterAgreementUpdated(
@@ -372,7 +361,11 @@ contract dHedgeCore is Ownable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _cbdata = _beforeAgreement(_agreementClass, _superToken.getUnderlyingToken(), _ctx);
+        _cbdata = _beforeAgreement(
+            _agreementClass,
+            _superToken.getUnderlyingToken(),
+            _ctx
+        );
     }
 
     function afterAgreementTerminated(

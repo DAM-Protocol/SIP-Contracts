@@ -119,25 +119,29 @@ describe("dHedgeCore Math Testing", function () {
     });
 
     async function setupEnv() {
-        regKey = await createSFRegistrationKey(admin.address);
-        dHedgeCoreFactory = await ethers.getContractFactory("dHedgeCore", {
+        dHedgeCoreCreatorFactory = await ethers.getContractFactory("dHedgeCoreFactory", {
             libraries: {
                 SFHelper: SFHelper.address,
-                dHedgeHelper: dHedgeHelper.address,
+                dHedgeHelper: dHedgeHelper.address
             },
             admin
         });
+        factory = await dHedgeCoreCreatorFactory.deploy();
 
-        app = await dHedgeCoreFactory.deploy(
+        await factory.deployed();
+        await registerAppByFactory(factory.address);
+
+        await factory.createdHedgeCore(
             Pool1,
             DHPTx.address,
             "20000",
-            regKey
         );
 
-        await app.deployed();
+        newCore = await factory.cores(Pool1);
 
-        await app.connect(admin).transferOwnership(DAO.address);
+        app = await ethers.getContractAt("dHedgeCore", newCore);
+
+        await factory.connect(admin).transferOwnership(DAO.address);
 
         await approveAndUpgrade();
     }
@@ -177,17 +181,19 @@ describe("dHedgeCore Math Testing", function () {
         }).exec(DAIWhale);
     }
 
-    async function startAndSub(wallet, superToken, userFlowRate) {
+    async function startAndSub(wallet, tokenObj, userFlowRate) {
         createFlowOp = sf.cfaV1.createFlow({
-            superToken: superToken,
+            superToken: tokenObj.superToken,
             receiver: app.address,
             flowRate: userFlowRate
         });
 
-        distIndex = await app.getTokenDistIndex(USDCContract.address);
+        tokenDistObj = await app.getTokenDistIndex(tokenObj.token);
+
+        tokenDistIndex = (tokenDistObj[0] === false) ? await app.getLatestDistIndex() : tokenDistObj[1];
 
         approveOp = sf.idaV1.approveSubscription({
-            indexId: distIndex.toString(),
+            indexId: tokenDistIndex,
             superToken: DHPTx.address,
             publisher: app.address
         });
@@ -195,19 +201,7 @@ describe("dHedgeCore Math Testing", function () {
         await sf.batchCall([createFlowOp, approveOp]).exec(wallet);
     }
 
-    async function createSFRegistrationKey(deployerAddr) {
-        registrationKey = `testKey-${Date.now()}`;
-        encodedKey = keccak256(
-            defaultAbiCoder.encode(
-                ["string", "address", "string"],
-                [
-                    "org.superfluid-finance.superfluid.appWhiteListing.registrationKey",
-                    deployerAddr,
-                    registrationKey,
-                ]
-            )
-        );
-
+    async function registerAppByFactory(factoryAddr) {
         governance = await host.getGovernance();
 
         sfGovernanceRO = await ethers.getContractAt(SuperfluidGovernanceBase.abi, governance);
@@ -217,9 +211,7 @@ describe("dHedgeCore Math Testing", function () {
 
         sfGovernance = await ethers.getContractAt(SuperfluidGovernanceBase.abi, governance, govOwnerSigner);
 
-        await sfGovernance.whiteListNewApp(SFConfig.hostAddress, encodedKey);
-
-        return registrationKey;
+        await sfGovernance.authorizeAppFactory(SFConfig.hostAddress, factoryAddr);
     }
 
     async function getIndexDetails(superToken, indexId) {
@@ -270,7 +262,7 @@ describe("dHedgeCore Math Testing", function () {
 
         userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(USDCWhale, USDC.superToken, userFlowRate);
+        await startAndSub(USDCWhale, USDC, userFlowRate);
 
         await increaseTime(getSeconds(30));
 
@@ -356,7 +348,7 @@ describe("dHedgeCore Math Testing", function () {
 
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(USDCWhale, USDC.superToken, userFlowRate);
+        await startAndSub(USDCWhale, USDC, userFlowRate);
 
         await increaseTime(getSeconds(1));
 
@@ -425,8 +417,15 @@ describe("dHedgeCore Math Testing", function () {
 
         userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(admin, USDC.superToken, userFlowRate);
-        await startAndSub(admin, DAI.superToken, userFlowRate);
+        await startAndSub(admin, USDC, userFlowRate);
+
+        console.log("Reaches here 1");
+
+        await startAndSub(admin, DAI, userFlowRate);
+
+        console.log("Reaches here 2");
+
+        // process.exit(0);
 
         await increaseTime(getSeconds(30));
 
@@ -559,9 +558,11 @@ describe("dHedgeCore Math Testing", function () {
     it("Should be able to calculate a user's share correctly (single-token)", async () => {
         await loadFixture(setupEnv);
 
+        console.log("\n--Manual verification required for this test--\n");
+
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(admin, USDC.superToken, userFlowRate);
+        await startAndSub(admin, USDC, userFlowRate);
 
         await increaseTime(getSeconds(30));
 
@@ -599,10 +600,12 @@ describe("dHedgeCore Math Testing", function () {
     it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
         await loadFixture(setupEnv);
 
+        console.log("\n--Manual verification required for this test--\n");
+
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(admin, USDC.superToken, userFlowRate);
-        await startAndSub(admin, DAI.superToken, userFlowRate);
+        await startAndSub(admin, USDC, userFlowRate);
+        await startAndSub(admin, DAI, userFlowRate);
 
         await increaseTime(getSeconds(30));
 
@@ -652,13 +655,15 @@ describe("dHedgeCore Math Testing", function () {
         await printDHPTxBalance(admin.address);
     });
 
-    it("should be able to calculate a user's share correctly (multi-user-single-token)", async () => {
+    it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
         await loadFixture(setupEnv);
+
+        console.log("\n--Manual verification required for this test--\n");
 
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(admin, USDC.superToken, userFlowRate);
-        await startAndSub(USDCWhale, USDC.superToken, userFlowRate);
+        await startAndSub(admin, USDC, userFlowRate);
+        await startAndSub(USDCWhale, USDC, userFlowRate);
 
         await increaseTime(getSeconds(30));
 
@@ -708,15 +713,15 @@ describe("dHedgeCore Math Testing", function () {
         await printDHPTxBalance(USDCWhale.address);
     });
 
-    it.only("should return uninvested amount after stream updation/termination", async () => {
+    it("should return uninvested amount after stream updation/termination", async () => {
         await loadFixture(setupEnv);
 
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-        await startAndSub(admin, USDC.superToken, userFlowRate);
+        await startAndSub(admin, USDC, userFlowRate);
 
         await increaseTime(getSeconds(1));
-        
+
         balanceBefore = await USDCx.balanceOf({
             account: admin.address,
             providerOrSigner: ethersProvider
@@ -743,7 +748,7 @@ describe("dHedgeCore Math Testing", function () {
             account: admin.address,
             providerOrSigner: ethersProvider
         });
-        
+
         await sf.cfaV1.deleteFlow({
             superToken: USDC.superToken,
             sender: admin.address,
@@ -756,6 +761,24 @@ describe("dHedgeCore Math Testing", function () {
         });
 
         expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(parseUnits("2", 18), parseUnits("1", 18));
+    });
+
+    it("should calculate fees correctly", async () => {
+        await loadFixture(setupEnv);
+
+        userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
+
+        await startAndSub(admin, USDC, userFlowRate);
+
+        await increaseTime(getSeconds(30));
+
+        balanceBefore = await USDCContract.balanceOf(DAO.address);
+
+        await app.dHedgeDeposit(USDCContract.address);
+
+        balanceAfter = await USDCContract.balanceOf(DAO.address);
+
+        expect(balanceAfter.sub(balanceBefore)).to.be.closeTo(parseUnits("2", 6), parseUnits("0.1", 6));
     });
 });
 
