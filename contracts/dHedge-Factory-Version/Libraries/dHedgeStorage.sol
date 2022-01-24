@@ -27,13 +27,15 @@ library dHedgeStorage {
 
     /**
      * @notice Struct containing data related to a dHEDGE pool and it's corresponding core contract.
+     * @param isActive Status of contract representing a dHEDGE pool.
      * @param DHPTx DHP super token for a dHEDGE pool.
-     * @param isActive Status of contract representing a dHedge pool.
+     * @param factory Factory contract which deployed the core contract
      * @param poolLogic Address of a dHEDGE pool.
+     * @param latestDistIndex Latest index created for distributing DHPTx according to a deposit token stream rate
+     * of a user
      * @param feeRate Fee percentage with 6 decimals.
      * between deposits in order to guard against perpetual cooldown issues
-     * @param tokenData Contains data regarding a market (a token)
-     * @dev Another variable called `lastDistributeAt` may be required.
+     * @param tokenData Contains data regarding a market/deposit token
      */
     struct dHedgePool {
         bool isActive;
@@ -41,7 +43,6 @@ library dHedgeStorage {
         address factory;
         address poolLogic;
         uint32 latestDistIndex;
-        uint32 feeRate;
         mapping(address => TokenData) tokenData;
     }
 }

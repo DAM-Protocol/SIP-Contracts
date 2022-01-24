@@ -126,15 +126,14 @@ describe("dHedgeCore Math Testing", function () {
             },
             admin
         });
-        factory = await dHedgeCoreCreatorFactory.deploy();
+        factory = await dHedgeCoreCreatorFactory.deploy("20000");
 
         await factory.deployed();
         await registerAppByFactory(factory.address);
 
         await factory.createdHedgeCore(
             Pool1,
-            DHPTx.address,
-            "20000",
+            DHPTx.address
         );
 
         newCore = await factory.cores(Pool1);

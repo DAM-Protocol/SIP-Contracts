@@ -9,7 +9,7 @@ import "hardhat/console.sol";
 /**
  * @title Superfluid helper library
  * @author rashtrakoff
- * @dev Contains functions which help with Superfluid streams related calculations
+ * @dev Contains functions which help in interacting with Superfluid contracts
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable not-rely-on-time
@@ -22,8 +22,13 @@ library SFHelper {
         IInstantDistributionAgreementV1(
             0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
         );
-        
 
+    /**
+     * @dev Function to distribute a supertoken amount according to an index
+     * @param _superToken The supertoken to be distributed
+     * @param _index Index containing share details
+     * @param _amount Amount of `_supertoken` to be distributed
+     */
     function distribute(
         ISuperToken _superToken,
         uint32 _index,
@@ -53,6 +58,13 @@ library SFHelper {
         console.log("Actual amount distributed: %s", _actualAmount);
     }
 
+    /**
+     * @dev Function to create a distribution index
+     * @param _superToken The supertoken to be distributed
+     * @param _index New index value containing share details
+     * @param _ctx Superfluid context object
+     * This function should only be called from a superapp callback
+     */
     function createIndexInCallback(
         ISuperToken _superToken,
         uint32 _index,
@@ -71,6 +83,13 @@ library SFHelper {
         );
     }
 
+    /**
+     * @dev Function to update shares of a user
+     * @param _superStreamToken The supertoken that the user is streaming
+     * @param _superDistToken The supertoken that's distributed in index with value `_index`
+     * @param _index Index containing share details
+     * @param _ctx Superfluid context object
+     */
     function updateSharesInCallback(
         ISuperToken _superStreamToken,
         ISuperToken _superDistToken,
@@ -107,14 +126,14 @@ library SFHelper {
         ISuperToken _superToken,
         address _user,
         uint256 _lastDepositAt
-    ) external view returns (uint256 _userUninvested) {
+    ) external view returns (uint256) {
         (uint256 _userPrevUpdateTimestamp, int96 _flowRate) = getFlow(
             _superToken,
             _user
         );
         uint256 _userFlowRate = uint256(uint96(_flowRate));
 
-        _userUninvested =
+        return
             _userFlowRate *
             (block.timestamp -
                 (
@@ -126,8 +145,8 @@ library SFHelper {
 
     /**
      *@notice Function to get the flow rate of a user
-     * @param _sender Address of the user
      * @param _superToken Address of the supertoken
+     * @param _sender Address of the user
      * @return _timestamp Timestamp corresponding to previous stream rate update time
      * @return _flowRate Flow rate of a user
      */

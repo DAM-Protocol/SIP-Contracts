@@ -10,10 +10,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 /**
- * @title Core contract for a dHedge pool
+ * @title Core contract for streaming into a dHedge pool
  * @author rashtrakoff
  * @notice Contains user facing functions
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
@@ -26,28 +26,29 @@ contract dHedgeCore is Initializable, SuperAppBase {
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
 
+
+    // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves
     dHedgeStorage.dHedgePool private poolData;
+
 
     /// @dev Initialize the factory
     /// @param _dHedgePool dHEDGE pool contract address
     /// @param _DHPTx Supertoken corresponding to the DHPT of the pool
-    /// @param _feeRate Fee rate for collecting streaming fees scaled to 1e6
     function initialize(
         address _dHedgePool,
-        ISuperToken _DHPTx,
-        uint32 _feeRate
+        ISuperToken _DHPTx
     ) external initializer {
         poolData.isActive = true;
         poolData.factory = msg.sender;
         poolData.DHPTx = _DHPTx;
         poolData.poolLogic = _dHedgePool;
-        poolData.feeRate = _feeRate;
 
         IERC20(_dHedgePool).safeIncreaseAllowance(
             address(_DHPTx),
             type(uint256).max
         );
     }
+
 
     /**************************************************************************
      * Core functions
@@ -79,6 +80,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         poolData.isActive = false;
     }
 
+    /// @dev Reactivates a dHedgeCore contract
     function reactivateCore() external {
         _onlyOwner(msg.sender);
         require(!poolData.isActive, "dHedgeCore: Pool already active");
@@ -98,10 +100,17 @@ contract dHedgeCore is Initializable, SuperAppBase {
         return poolData.poolLogic;
     }
 
+    /// @dev Gets the latest distribution index created
+    /// @return Number corresponding to the latest created index
+    /// This function can also be used to get number of tokens supported by this dHedgeCore
     function getLatestDistIndex() external view returns (uint32) {
         return poolData.latestDistIndex;
     }
 
+    /// @dev Gets the distribution index corresponding to an underlying token
+    /// @param _token Address of a deposit token
+    /// @return Boolean depicting if a distribution index exists for `_token`
+    /// @return Number representing the index value corresponding to `_token` if it exists
     function getTokenDistIndex(address _token)
         external
         view
@@ -127,71 +136,9 @@ contract dHedgeCore is Initializable, SuperAppBase {
 
     /// @dev Checks if deposit action can be performed
     /// @return Boolean indicating if upkeep/deposit can be performed
+    /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool
     function requireUpkeep() public view returns (bool, address) {
         return poolData.requireUpkeep();
-    }
-
-    /// @dev Helper function that's called after agreements are created, updated or terminated
-    /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
-    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    function _afterAgreement(
-        address _agreementClass,
-        address _underlyingToken,
-        bytes memory _ctx,
-        bytes memory _cbdata
-    ) internal returns (bytes memory _newCtx) {
-        if (
-            ISuperAgreement(_agreementClass).agreementType() ==
-            keccak256(
-                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
-            )
-        ) {
-            _newCtx = _ctx;
-        } else {
-            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
-            uint256 _userUninvested = abi.decode(_cbdata, (uint256));
-            dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
-                _underlyingToken
-            ];
-
-            _newCtx = tokenData.superToken.updateSharesInCallback(
-                poolData.DHPTx,
-                tokenData.distIndex,
-                _ctx
-            );
-
-            assert(
-                _userUninvested <= tokenData.superToken.balanceOf(address(this))
-            );
-
-            require(
-                tokenData.superToken.transfer(_sender, _userUninvested),
-                "dHedgeHCore: Uninvested amount transfer failed"
-            );
-        }
-    }
-
-    /// @dev Helper function that's called before agreements are created, updated or terminated
-    /// @param _ctx Context data of a user provided by SF contract
-    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    /// @return _cbdata Callback data that needs to be passed on to _afterAgreementCFA function
-    function _beforeAgreement(
-        address _agreementClass,
-        address _underlyingToken,
-        bytes memory _ctx
-    ) internal view returns (bytes memory _cbdata) {
-        if (
-            ISuperAgreement(_agreementClass).agreementType() ==
-            keccak256(
-                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
-            )
-        ) {
-            _cbdata = new bytes(0);
-        } else {
-            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
-
-            _cbdata = abi.encode(calcUserUninvested(_sender, _underlyingToken));
-        }
     }
 
     /// @dev Checks status of the core and reverts if inactive
@@ -229,6 +176,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
             "dHedgeCore: Callback called illegaly"
         );
     }
+
 
     /**************************************************************************
      * SuperApp callbacks
@@ -278,14 +226,13 @@ contract dHedgeCore is Initializable, SuperAppBase {
         dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
             _underlyingToken
         ];
+
         /* 
             Check if the underlying token is enabled as deposit asset. If not, 
             revert the transaction as the tokens can't be deposited into the pool.
             If yes:
                 Map supertoken to the underlying token.
                 Unlimited approve underlying token to the dHedge pool.
-                Unlimited approve DHPT to DHPTx contract.
-            TODO: Confirm whether unlimited approve can be misused by the poolLogic contract.
         */
         if (address(tokenData.superToken) == address(0)) {
             tokenData.superToken = _superToken;
@@ -310,8 +257,6 @@ contract dHedgeCore is Initializable, SuperAppBase {
             tokenData.distIndex,
             _ctx
         );
-
-        console.log("Latest index: %s", poolData.latestDistIndex);
     }
 
     function beforeAgreementUpdated(
@@ -325,7 +270,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyExpected(_agreementClass);
         _onlyActive();
 
-        _cbdata = _beforeAgreement(
+        _cbdata = poolData.beforeAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
             _ctx
@@ -343,7 +288,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _newCtx = _afterAgreement(
+        _newCtx = poolData.afterAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
             _ctx,
@@ -361,7 +306,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _cbdata = _beforeAgreement(
+        _cbdata = poolData.beforeAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
             _ctx
@@ -379,7 +324,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _newCtx = _afterAgreement(
+        _newCtx = poolData.afterAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
             _ctx,

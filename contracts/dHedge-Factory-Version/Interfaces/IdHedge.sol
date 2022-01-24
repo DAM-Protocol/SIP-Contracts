@@ -14,10 +14,6 @@ interface IPoolLogic {
     /// @param _fundTokenAmount the fund token amount
     function withdraw(uint256 _fundTokenAmount) external;
 
-    /// @notice Get price of the asset
-    /// @param price A price of the asset
-    function tokenPrice() external view returns (uint256 price);
-
     /// @notice Pool manager logic address for a pool
     function poolManagerLogic() external view returns (address);
 

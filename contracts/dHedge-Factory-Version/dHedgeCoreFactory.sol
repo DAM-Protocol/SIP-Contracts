@@ -15,28 +15,40 @@ contract dHedgeCoreFactory is Ownable {
 
     address public immutable implementation;
 
-    // NOTE: CONFIG_WORD is used to omit the specific agreement hooks (NOOP - Not Operate)
+    /// @notice Fee rate for collecting streaming fees scaled to 1e6
+    uint32 public defaultFeeRate;
+
+    /// @custom:note CONFIG_WORD is used to omit the specific agreement hooks of superapps (NOOP - Not Operate)
     uint256 private immutable CONFIG_WORD = 1; // 1 << 0 == 1
 
+    /// @notice Mapping containing core address for every dHEDGE pool if deployed/created
     mapping(address => address) public cores;
 
-    constructor() {
+
+    constructor(uint32 _defaultFeeRate) {
         implementation = address(new dHedgeCore());
+        defaultFeeRate = _defaultFeeRate;
     }
 
+    /// @notice Creates a new core for a given dHEDGE pool
+    /// @param _dHedgePool Address of the dHEDGE pool for which a core needs to be created
+    /// @param _DHPTx Supertoken of the corresponding DHPT of `_dHedgePool` 
     function createdHedgeCore(
         address _dHedgePool,
-        ISuperToken _DHPTx,
-        uint32 _feeRate
+        ISuperToken _DHPTx
     ) external {
         require(cores[_dHedgePool] == address(0), "Core already exists");
 
         address newCore = Clones.clone(implementation);
 
-        dHedgeCore(newCore).initialize(_dHedgePool, _DHPTx, _feeRate);
+        dHedgeCore(newCore).initialize(_dHedgePool, _DHPTx);
 
         HOST.registerAppByFactory(ISuperApp(newCore), CONFIG_WORD);
 
         cores[_dHedgePool] = newCore;
+    }
+
+    function setDefaultFeeRate(uint32 _defaultFeeRate) external onlyOwner {
+        defaultFeeRate = _defaultFeeRate;
     }
 }

@@ -20,7 +20,15 @@ require("./tasks/dHedge/DeactivateCore");
  * @type import('hardhat/config').HardhatUserConfig
  */
  module.exports = {
-  solidity: "0.8.4",
+  solidity: {
+    version: "0.8.4",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
+  },
   networks: {
     hardhat: {
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
@@ -44,7 +52,10 @@ require("./tasks/dHedge/DeactivateCore");
   gasReporter: {
     enabled: true,
     currency: "USD",
-    gasPrice: 100 // Set to 100 GWei
+    token: "MATIC",
+    gasPrice: 100, // Set to 100 GWei
+    gasPriceApi: "https://api.polygonscan.com/api?module=proxy&action=eth_gasPrice",
+    showTimeSpent: true
   },
   etherscan: {
     apiKey: process.env.POLYGONSCAN_KEY,

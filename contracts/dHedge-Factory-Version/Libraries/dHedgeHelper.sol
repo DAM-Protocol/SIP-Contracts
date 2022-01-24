@@ -2,6 +2,7 @@
 pragma solidity ^0.8.4;
 
 import {IPoolLogic, IPoolManagerLogic} from "../Interfaces/IdHedge.sol";
+import {IdHedgeCoreFactory} from "../Interfaces/IdHedgeCoreFactory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -32,22 +33,14 @@ library dHedgeHelper {
 
     event TokenDeposited(
         address _token,
-        uint256 _tokenMarketIndex,
         uint256 _amount,
         uint256 _liquidityMinted
-    );
-
-    event UninvestedWithdrawn(
-        address _dHedgeCore,
-        address _user,
-        address _token,
-        uint256 _amount
     );
 
     /**
      * @dev Function to deposit tokens into a dHedge pool
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
-     * @custom:note Add code to collect fees later on.
+     * @param _depositToken Address of the underlying token (deposit token and not the supertoken)
      */
     function deposit(
         dHedgeStorage.dHedgePool storage _dHedgePool,
@@ -80,7 +73,7 @@ library dHedgeHelper {
             );
 
             // Calculate fee to be collected
-            uint256 _feeCollected = (_depositBalance * _dHedgePool.feeRate) /
+            uint256 _feeCollected = (_depositBalance * IdHedgeCoreFactory(_dHedgePool.factory).defaultFeeRate()) /
                 1e6;
 
             _depositBalance -= _feeCollected;
@@ -92,17 +85,9 @@ library dHedgeHelper {
 
                 // Transfer the fees collected to the owner
                 IERC20(_depositToken).safeTransfer(
-                    Ownable(_dHedgePool.factory).owner(),
+                    IdHedgeCoreFactory(_dHedgePool.factory).owner(),
                     _feeCollected
                 );
-
-                // require(
-                //     IERC20(_depositToken).transfer(
-                //         Ownable(address(this)).owner(),
-                //         _feeCollected
-                //     ),
-                //     "dHedgeHelper: Fee transfer failed"
-                // );
 
                 // Deposit the tokens into the dHedge pool
                 uint256 _liquidityMinted = _poolLogic.deposit(
@@ -119,18 +104,94 @@ library dHedgeHelper {
                     _dHedgePool.DHPTx.balanceOf(address(this))
                 );
 
-                console.log(
-                    "Liquidity minted for token %s: %s",
+                // Following console logs are required for manual verification of some tests
+                // console.log(
+                //     "Liquidity minted for token %s: %s",
+                //     _depositToken,
+                //     _liquidityMinted
+                // );
+
+                // console.log(
+                //     "Fee collected for token %s: %s",
+                //     _depositToken,
+                //     _feeCollected
+                // );
+
+                emit TokenDeposited(
                     _depositToken,
+                    _depositBalance,
                     _liquidityMinted
                 );
-
-                console.log(
-                    "Fee collected for token %s: %s",
-                    _depositToken,
-                    _feeCollected
-                );
             }
+        }
+    }
+
+    /// @dev Helper function that's called after agreements are created, updated or terminated
+    /// @param _agreementClass Address of the agreement calling this function
+    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
+    /// @param _ctx Superfluid context object
+    /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
+    /// @param _newCtx New Superfluid context object
+    function afterAgreement(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _agreementClass,
+        address _underlyingToken,
+        bytes memory _ctx,
+        bytes memory _cbdata
+    ) external returns (bytes memory _newCtx) {
+        if (
+            ISuperAgreement(_agreementClass).agreementType() ==
+            keccak256(
+                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+            )
+        ) {
+            _newCtx = _ctx;
+        } else {
+            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+            uint256 _userUninvested = abi.decode(_cbdata, (uint256));
+            dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
+                _underlyingToken
+            ];
+
+            _newCtx = tokenData.superToken.updateSharesInCallback(
+                _dHedgePool.DHPTx,
+                tokenData.distIndex,
+                _ctx
+            );
+
+            assert(
+                _userUninvested <= tokenData.superToken.balanceOf(address(this))
+            );
+
+            require(
+                tokenData.superToken.transfer(_sender, _userUninvested),
+                "dHedgeHelper: Uninvested amount transfer failed"
+            );
+        }
+    }
+
+    /// @dev Helper function that's called before agreements are created, updated or terminated
+    /// @param _agreementClass Address of the agreement calling this function
+    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
+    /// @param _ctx Context data of a user provided by SF contract
+    /// @return _cbdata Callback data that needs to be passed on to _afterAgreementCFA function
+    function beforeAgreement(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _agreementClass,
+        address _underlyingToken,
+        bytes memory _ctx
+    ) external view returns (bytes memory _cbdata) {
+        if (
+            ISuperAgreement(_agreementClass).agreementType() ==
+            keccak256(
+                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+            )
+        ) {
+            _cbdata = new bytes(0);
+        } else {
+            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+
+            _cbdata = abi.encode(calcUserUninvested(_dHedgePool, _sender, _underlyingToken));
         }
     }
 
@@ -138,7 +199,7 @@ library dHedgeHelper {
      * @dev Function which checks if deposit function can be called or not
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
      * @return _reqUpkeep Boolean depicting need for upkeep
-     * @return _depositToken Address of the token to be deposited
+     * @return _depositToken Address of the underlying token (deposit token and not the supertoken)
      * This function is useful for on-chain keepers. Deposit function should only be called if `_reqUpkeep` is true
      * let whatever be the address of the `_depositToken`
      */
@@ -178,15 +239,23 @@ library dHedgeHelper {
         return (false, address(0));
     }
 
+    /**
+     * @dev Function to calculate uninvested amount of a user to return that after stream updation/termination
+     * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
+     * @param _user Address of the user whose uninvested amount has to be calculated
+     * @param _depositToken Address of the underlying token (deposit token and not the supertoken)
+     * @return Amount representing user's uninvested amount
+     */
     function calcUserUninvested(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _user,
         address _depositToken
-    ) public view returns (uint256 _userUninvested) {
+    ) public view returns (uint256) {
         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
             _depositToken
         ];
-        _userUninvested = tokenData.superToken.calcUserUninvested(
+        
+        return tokenData.superToken.calcUserUninvested(
             _user,
             tokenData.lastDepositAt
         );
