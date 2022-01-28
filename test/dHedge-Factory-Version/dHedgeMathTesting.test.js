@@ -124,7 +124,7 @@ describe("dHedgeCore Math Testing", function () {
             },
             admin
         });
-        factory = await dHedgeCoreCreatorFactory.deploy("20000");
+        factory = await dHedgeCoreCreatorFactory.deploy(DAO.address, "20000");
 
         await factory.deployed();
         await registerAppByFactory(factory.address);
@@ -138,7 +138,7 @@ describe("dHedgeCore Math Testing", function () {
 
         app = await ethers.getContractAt("dHedgeCore", newCore);
 
-        await factory.connect(admin).transferOwnership(DAO.address);
+        // await factory.connect(admin).transferOwnership(DAO.address);
 
         await PoolFactoryContract.connect(dHEDGEOwner).addTransferWhitelist(newCore);
 

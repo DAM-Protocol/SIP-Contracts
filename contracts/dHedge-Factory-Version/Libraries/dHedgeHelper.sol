@@ -85,7 +85,7 @@ library dHedgeHelper {
 
                 // Transfer the fees collected to the owner
                 IERC20(_depositToken).safeTransfer(
-                    IdHedgeCoreFactory(_dHedgePool.factory).owner(),
+                    IdHedgeCoreFactory(_dHedgePool.factory).dao(),
                     _feeCollected
                 );
 
@@ -126,12 +126,14 @@ library dHedgeHelper {
         }
     }
 
-    /// @dev Helper function that's called after agreements are created, updated or terminated
-    /// @param _agreementClass Address of the agreement calling this function
-    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    /// @param _ctx Superfluid context object
-    /// @param _cbdata Callback data we passed before agreement was created, updated or terminated
-    /// @param _newCtx New Superfluid context object
+    /**
+     * @dev Helper function that's called after agreements are created, updated or terminated
+     * @param _agreementClass Address of the agreement calling this function
+     * @param _underlyingToken Address of the underlying token on which operations need to be performed
+     * @param _ctx Superfluid context object
+     * @param _cbdata Callback data we passed before agreement was created, updated or terminated
+     * @param _newCtx New Superfluid context object
+     */
     function afterAgreement(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _agreementClass,
@@ -170,11 +172,13 @@ library dHedgeHelper {
         }
     }
 
-    /// @dev Helper function that's called before agreements are created, updated or terminated
-    /// @param _agreementClass Address of the agreement calling this function
-    /// @param _underlyingToken Address of the underlying token on which operations need to be performed
-    /// @param _ctx Context data of a user provided by SF contract
-    /// @return _cbdata Callback data that needs to be passed on to _afterAgreementCFA function
+    /**
+     * @dev Helper function that's called before agreements are created, updated or terminated
+     * @param _agreementClass Address of the agreement calling this function
+     * @param _underlyingToken Address of the underlying token on which operations need to be performed
+     * @param _ctx Context data of a user provided by SF contract
+     * @return _cbdata Callback data that needs to be passed on to _afterAgreementCFA function
+     */
     function beforeAgreement(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _agreementClass,
