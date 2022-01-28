@@ -4,8 +4,7 @@ const { provider, loadFixture, deployMockContract } = waffle;
 const { parseUnits } = require("@ethersproject/units");
 const SuperfluidSDK = require("@superfluid-finance/sdk-core");
 const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
-const dHEDGEPoolLogic = require("@dhedge/v2-sdk/src/abi/PoolLogic.json");
-const dHEDGEPoolFactory = require("@dhedge/v2-sdk/src/abi/PoolFactory.json");
+const dHEDGEPoolFactory = require("../../helpers/PoolFactoryABI.json");
 const {
     getBigNumber,
     getTimeStamp,
@@ -114,8 +113,7 @@ describe("dHedgeCore Math Testing", function () {
         AssetHandlerContract = await ethers.getContractAt(AssetHandlerABI, "0x760FE3179c8491f4b75b21A81F3eE4a5D616A28a");
         await AssetHandlerContract.connect(dHEDGEOwner).setChainlinkTimeout(getSeconds(500).toString());
 
-        PoolFactoryContract = await ethers.getContractAt(dHEDGEPoolFactory.abi, "0xfdc7b8bFe0DD3513Cc669bB8d601Cb83e2F69cB0");
-        await PoolFactoryContract.connect(dHEDGEOwner).setExitCooldown(constants.Zero);
+        PoolFactoryContract = await ethers.getContractAt(JSON.parse(dHEDGEPoolFactory.result), "0xfdc7b8bFe0DD3513Cc669bB8d601Cb83e2F69cB0");
     });
 
     async function setupEnv() {
@@ -141,6 +139,8 @@ describe("dHedgeCore Math Testing", function () {
         app = await ethers.getContractAt("dHedgeCore", newCore);
 
         await factory.connect(admin).transferOwnership(DAO.address);
+
+        await PoolFactoryContract.connect(dHEDGEOwner).addTransferWhitelist(newCore);
 
         await approveAndUpgrade();
     }

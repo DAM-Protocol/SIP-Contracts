@@ -94,11 +94,11 @@ contract dHedgeCore is Initializable, SuperAppBase {
         return poolData.isActive;
     }
 
-    /// @notice Gets pool address
-    /// @return Returns address of the dHedge pool this core contract serves
-    function getPoolLogic() external view returns (address) {
-        return poolData.poolLogic;
-    }
+    // /// @notice Gets pool address
+    // /// @return Returns address of the dHedge pool this core contract serves
+    // function getPoolLogic() external view returns (address) {
+    //     return poolData.poolLogic;
+    // }
 
     /// @dev Gets the latest distribution index created
     /// @return Number corresponding to the latest created index
@@ -238,11 +238,11 @@ contract dHedgeCore is Initializable, SuperAppBase {
             tokenData.superToken = _superToken;
             tokenData.distIndex = poolData.latestDistIndex++;
 
-            console.log(
-                "Index for token %s: %s",
-                _underlyingToken,
-                tokenData.distIndex
-            );
+            // console.log(
+            //     "Index for token %s: %s",
+            //     _underlyingToken,
+            //     tokenData.distIndex
+            // );
 
             poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _ctx);
 
