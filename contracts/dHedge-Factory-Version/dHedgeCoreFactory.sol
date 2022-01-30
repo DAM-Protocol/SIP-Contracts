@@ -5,21 +5,22 @@ import "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/I
 import "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperApp.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "./Interfaces/IdHedgeCoreFactory.sol";
 import "./dHedgeCore.sol";
 
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
-contract dHedgeCoreFactory is Ownable {
+contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     ISuperfluid private constant HOST =
         ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
 
     address public immutable implementation;
 
     /// @notice The DAO which receives fees
-    address public dao;
+    address public override dao;
 
     /// @notice Fee rate for collecting streaming fees scaled to 1e6
-    uint32 public defaultFeeRate;
+    uint32 public override defaultFeeRate;
 
     /// @custom:note CONFIG_WORD is used to omit the specific agreement hooks of superapps (NOOP - Not Operate)
     uint256 private immutable CONFIG_WORD = 1; // 1 << 0 == 1
@@ -37,10 +38,14 @@ contract dHedgeCoreFactory is Ownable {
     /// @param _defaultFeeRate The new fee rate scaled to 1e6
     function setDefaultFeeRate(uint32 _defaultFeeRate) external onlyOwner {
         defaultFeeRate = _defaultFeeRate;
+
+        emit FeeRateChanged(_defaultFeeRate);
     }
 
     function setDAOAddress(address _dao) external onlyOwner {
         dao = _dao;
+
+        emit DAOAddressChanged(_dao);
     }
 
     /// @notice Creates a new core for a given dHEDGE pool
@@ -58,5 +63,7 @@ contract dHedgeCoreFactory is Ownable {
         HOST.registerAppByFactory(ISuperApp(newCore), CONFIG_WORD);
 
         cores[_dHedgePool] = newCore;
+
+        emit CoreCreated(newCore, _dHedgePool, address(_DHPTx));
     }
 }

@@ -14,6 +14,12 @@ import "hardhat/console.sol";
  */
 // solhint-disable not-rely-on-time
 library SFHelper {
+    event NewSupertokenAdded(
+        address _superToken,
+        address _underlyingToken,
+        uint32 _index
+    );
+
     ISuperfluid public constant HOST =
         ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
     IConstantFlowAgreementV1 public constant CFA_V1 =
@@ -55,7 +61,7 @@ library SFHelper {
             new bytes(0)
         );
 
-        console.log("Actual amount distributed: %s", _actualAmount);
+        // console.log("Actual amount distributed: %s", _actualAmount);
     }
 
     /**
@@ -80,6 +86,12 @@ library SFHelper {
             ),
             new bytes(0), // userData
             _ctx
+        );
+
+        emit NewSupertokenAdded(
+            _superToken.getUnderlyingToken(),
+            address(_superToken),
+            _index
         );
     }
 

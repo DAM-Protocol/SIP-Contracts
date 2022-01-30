@@ -9,9 +9,9 @@ require("solidity-coverage");
 require('hardhat-contract-sizer');
 require("hardhat-tracer");
 require("hardhat-deploy");
-require("./tasks/dHedge/CreateSIP");
-require("./tasks/dHedge/PauseCore");
-require("./tasks/dHedge/DeactivateCore");
+require("./tasks/dHedge-Factory-Version/CreateSIP");
+require("./tasks/dHedge-Factory-Version/PauseCore");
+require("./tasks/dHedge-Factory-Version/DeactivateCore");
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more

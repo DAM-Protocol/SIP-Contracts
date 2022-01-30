@@ -2,7 +2,11 @@
 pragma solidity ^0.8.4;
 
 interface IdHedgeCoreFactory {
-    function owner() external view returns(address);
-    function dao() external view returns(address);
-    function defaultFeeRate() external view returns(uint32);
+    event CoreCreated(address _newCore, address _pool, address _poolSuperToken);
+    event FeeRateChanged(uint32 _newFeeRate);
+    event DAOAddressChanged(address _newDAO);
+
+    function dao() external view returns (address);
+
+    function defaultFeeRate() external view returns (uint32);
 }

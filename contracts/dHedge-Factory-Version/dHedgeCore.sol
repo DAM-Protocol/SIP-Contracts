@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
 import "./Interfaces/IdHedgeCoreFactory.sol";
+
 // import "hardhat/console.sol";
 
 /**
@@ -27,18 +28,18 @@ contract dHedgeCore is Initializable, SuperAppBase {
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
 
+    event EmergencyWithdraw(address _token);
 
     // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves
     dHedgeStorage.dHedgePool private poolData;
 
-
     /// @dev Initialize the factory
     /// @param _dHedgePool dHEDGE pool contract address
     /// @param _DHPTx Supertoken corresponding to the DHPT of the pool
-    function initialize(
-        address _dHedgePool,
-        ISuperToken _DHPTx
-    ) external initializer {
+    function initialize(address _dHedgePool, ISuperToken _DHPTx)
+        external
+        initializer
+    {
         poolData.isActive = true;
         poolData.factory = msg.sender;
         poolData.DHPTx = _DHPTx;
@@ -49,7 +50,6 @@ contract dHedgeCore is Initializable, SuperAppBase {
             type(uint256).max
         );
     }
-
 
     /**************************************************************************
      * Core functions
@@ -71,6 +71,8 @@ contract dHedgeCore is Initializable, SuperAppBase {
             IdHedgeCoreFactory(poolData.factory).dao(),
             IERC20(_token).balanceOf(address(this))
         );
+
+        emit EmergencyWithdraw(_token);
     }
 
     /// @dev Deactivates a dHedgeCore contract
@@ -177,7 +179,6 @@ contract dHedgeCore is Initializable, SuperAppBase {
             "dHedgeCore: Callback called illegaly"
         );
     }
-
 
     /**************************************************************************
      * SuperApp callbacks

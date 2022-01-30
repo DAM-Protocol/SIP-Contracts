@@ -1,13 +1,24 @@
+const prompt = require("prompt-sync")({sigint: true});
+
 module.exports = async function ({ deployments, getNamedAccounts}) {
     const { deploy } = deployments;
     const { deployer } = await getNamedAccounts();
+
+    const DAOAddr = prompt("Enter DAO address: ");
+    const feeRate = prompt("Enter default fee rate scaled to 1e6: ");
 
     console.info("\n--Beginning infrastructure deployment--\n");
 
     const SFHelper = await deploy("SFHelper", {
         from: deployer,
         log: true,
-        skipIfAlreadyDeployed: true
+        skipIfAlreadyDeployed: false
+    });
+
+    const dHedgeStorage = await deploy("dHedgeStorage", {
+        from: deployer,
+        log: true,
+        skipIfAlreadyDeployed: false
     });
 
     const dHedgeHelper = await deploy("dHedgeHelper", {
@@ -17,28 +28,21 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
         },
         log: true,
         skipIfAlreadyDeployed: false
-    });
+    });  
 
-    const dHedgeStorage = await deploy("dHedgeStorage", {
+    const dHedgeCoreFactory = await deploy("dHedgeCoreFactory", {
         from: deployer,
         libraries: {
-            SFHelper: SFHelper.address
+            SFHelper: SFHelper.address,
+            dHedgeHelper: dHedgeHelper.address
         },
+        args: [
+            DAOAddr,
+            feeRate
+        ],
         log: true,
-        skipIfAlreadyDeployed: true
+        skipIfAlreadyDeployed: false
     });
-
-    const dHedgeBank = await deploy("dHedgeBank", {
-        from: deployer,
-        log: true,
-        skipIfAlreadyDeployed: true
-    });
-    
-    const dHedgeUpkeep = await deploy("dHedgeUpkeepGelato", {
-        from: deployer,
-        log: true,
-        skipIfAlreadyDeployed: true
-    });    
 
     try {
         try {
@@ -52,7 +56,7 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
         try {
             await hre.run("verify:verify", {
                 address: dHedgeStorage.address,
-                contract: "contracts/dHedge/Libraries/dHedgeStorage.sol:dHedgeStorage"
+                contract: "contracts/dHedge-Factory-Version/Libraries/dHedgeStorage.sol:dHedgeStorage"
             });
         } catch (error) {
             console.log(`${error.message} for dHedgeStorage at address ${dHedgeStorage.address}`);
@@ -64,7 +68,7 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
                 libraries: {
                     SFHelper: SFHelper.address
                 },
-                contract: "contracts/dHedge/Libraries/dHedgeHelper.sol:dHedgeHelper"
+                contract: "contracts/dHedge-Factory-Version/Libraries/dHedgeHelper.sol:dHedgeHelper"
             });
         } catch (error) {
             console.log(`${error.message} for dHedgeHelper at address ${dHedgeHelper.address}`);
@@ -72,18 +76,19 @@ module.exports = async function ({ deployments, getNamedAccounts}) {
 
         try {
             await hre.run("verify:verify", {
-                address: dHedgeBank.address
+                address: dHedgeCoreFactory.address,
+                libraries: {
+                    SFHelper: SFHelper.address,
+                    dHedgeHelper: dHedgeHelper.address
+                },
+                constructorArguments: [
+                    DAOAddr,
+                    feeRate
+                ],
+                contract: "contracts/dHedge-Factory-Version/dHedgeCoreFactory.sol:dHedgeCoreFactory"
             });
         } catch (error) {
-            console.log(`${error.message} for dHedgeBank at address ${dHedgeBank.address}`);
-        }
-        
-        try {
-            await hre.run("verify:verify", {
-                address: dHedgeUpkeep.address
-            });
-        } catch (error) {
-            console.log(`${error.message} for dHedgeUpkeep at address ${dHedgeUpkeep.address}`);
+            console.log(`${error.message} for dHedgeCoreFactory at address ${dHedgeCoreFactory.address}`);
         }
     } catch (error) {
         console.log(`Infrastructure contract verification failed: ${error.message}`);
