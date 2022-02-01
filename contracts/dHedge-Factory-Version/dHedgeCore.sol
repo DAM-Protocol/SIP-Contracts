@@ -12,7 +12,7 @@ import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
 import "./Interfaces/IdHedgeCoreFactory.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Core contract for streaming into a dHedge pool
@@ -326,11 +326,25 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_agreementClass);
 
-        _newCtx = poolData.afterAgreement(
-            _agreementClass,
-            _superToken.getUnderlyingToken(),
-            _ctx,
-            _cbdata
-        );
+        // _newCtx = poolData.afterAgreement(
+        //     _agreementClass,
+        //     _superToken.getUnderlyingToken(),
+        //     _ctx,
+        //     _cbdata
+        // );
+
+        try
+            poolData.afterAgreement(
+                _agreementClass,
+                _superToken.getUnderlyingToken(),
+                _ctx,
+                _cbdata
+            )
+        returns (bytes memory _modCtx) {
+            _newCtx = _modCtx;
+        } catch (bytes memory _error) {
+            console.logBytes(_error);
+            _newCtx = _ctx; // Unnecessary line ? 
+        }
     }
 }

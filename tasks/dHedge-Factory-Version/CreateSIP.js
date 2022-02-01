@@ -1,5 +1,4 @@
 const SuperfluidSDK = require("@superfluid-finance/sdk-core");
-const { ethers } = require("hardhat");
 const { task } = require("hardhat/config");
 
 task("CreateSIP", "Creates a SIP contract for a dHEDGE pool")
