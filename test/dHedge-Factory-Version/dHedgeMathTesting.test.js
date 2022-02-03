@@ -342,7 +342,7 @@ describe("dHedgeCore Math Testing", function () {
         expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
     });
 
-    it("Should be able to calculate uninvested amount correctly - 2", async () => {
+    it.only("Should be able to calculate uninvested amount correctly - 2", async () => {
         await loadFixture(setupEnv);
 
         userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));

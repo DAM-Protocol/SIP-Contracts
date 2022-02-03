@@ -73,8 +73,8 @@ library dHedgeHelper {
             );
 
             // Calculate fee to be collected
-            uint256 _feeCollected = (_depositBalance * IdHedgeCoreFactory(_dHedgePool.factory).defaultFeeRate()) /
-                1e6;
+            uint256 _feeCollected = (_depositBalance *
+                IdHedgeCoreFactory(_dHedgePool.factory).defaultFeeRate()) / 1e6;
 
             _depositBalance -= _feeCollected;
 
@@ -141,15 +141,15 @@ library dHedgeHelper {
         bytes memory _ctx,
         bytes memory _cbdata
     ) external returns (bytes memory _newCtx) {
+        _newCtx = _ctx;
+
         if (
             ISuperAgreement(_agreementClass).agreementType() ==
             keccak256(
-                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+                "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            _newCtx = _ctx;
-        } else {
-            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+            address _sender = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
@@ -158,7 +158,7 @@ library dHedgeHelper {
             _newCtx = tokenData.superToken.updateSharesInCallback(
                 _dHedgePool.DHPTx,
                 tokenData.distIndex,
-                _ctx
+                _newCtx
             );
 
             assert(
@@ -185,17 +185,19 @@ library dHedgeHelper {
         address _underlyingToken,
         bytes memory _ctx
     ) external view returns (bytes memory _cbdata) {
+        _cbdata = new bytes(0);
+
         if (
             ISuperAgreement(_agreementClass).agreementType() ==
             keccak256(
-                "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+                "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            _cbdata = new bytes(0);
-        } else {
             address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
 
-            _cbdata = abi.encode(calcUserUninvested(_dHedgePool, _sender, _underlyingToken));
+            _cbdata = abi.encode(
+                calcUserUninvested(_dHedgePool, _sender, _underlyingToken)
+            );
         }
     }
 
@@ -258,11 +260,12 @@ library dHedgeHelper {
         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
             _depositToken
         ];
-        
-        return tokenData.superToken.calcUserUninvested(
-            _user,
-            tokenData.lastDepositAt
-        );
+
+        return
+            tokenData.superToken.calcUserUninvested(
+                _user,
+                tokenData.lastDepositAt
+            );
     }
 
     /**

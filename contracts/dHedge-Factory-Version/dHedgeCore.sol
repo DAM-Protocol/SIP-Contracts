@@ -165,7 +165,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         );
     }
 
-    /// @dev Checks if the agreement is of type CFA
+    /// @dev Checks if the agreement is of type CFA or IDA
     function _onlyExpected(address _agreementClass) internal view {
         require(
             ISuperAgreement(_agreementClass).agreementType() ==
@@ -223,6 +223,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
     ) external override returns (bytes memory _newCtx) {
         _onlyHost();
         _onlyExpected(_agreementClass);
+        _newCtx = _ctx;
 
         address _underlyingToken = _superToken.getUnderlyingToken();
         dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
@@ -246,7 +247,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
             //     tokenData.distIndex
             // );
 
-            poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _ctx);
+            _newCtx = poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _newCtx);
 
             IERC20(_underlyingToken).safeIncreaseAllowance(
                 poolData.poolLogic,
@@ -257,7 +258,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _newCtx = _superToken.updateSharesInCallback(
             poolData.DHPTx,
             tokenData.distIndex,
-            _ctx
+            _newCtx
         );
     }
 
@@ -289,15 +290,17 @@ contract dHedgeCore is Initializable, SuperAppBase {
     ) external override returns (bytes memory _newCtx) {
         _onlyHost();
         _onlyExpected(_agreementClass);
+        _newCtx = _ctx;
 
         _newCtx = poolData.afterAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
-            _ctx,
+            _newCtx,
             _cbdata
         );
     }
 
+    /// @dev Remove internal checker functions and instead use if-else
     function beforeAgreementTerminated(
         ISuperToken _superToken,
         address _agreementClass,
@@ -306,13 +309,19 @@ contract dHedgeCore is Initializable, SuperAppBase {
         bytes calldata _ctx
     ) external view override returns (bytes memory _cbdata) {
         _onlyHost();
-        _onlyExpected(_agreementClass);
 
-        _cbdata = poolData.beforeAgreement(
-            _agreementClass,
-            _superToken.getUnderlyingToken(),
-            _ctx
-        );
+        try
+            poolData.beforeAgreement(
+                _agreementClass,
+                _superToken.getUnderlyingToken(),
+                _ctx
+            )
+        returns (bytes memory _newCbData) {
+            _cbdata = _newCbData;
+        } catch (bytes memory _error) {
+            console.logBytes(_error);
+            _cbdata = new bytes(0);
+        }
     }
 
     function afterAgreementTerminated(
@@ -324,27 +333,19 @@ contract dHedgeCore is Initializable, SuperAppBase {
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
         _onlyHost();
-        _onlyExpected(_agreementClass);
-
-        // _newCtx = poolData.afterAgreement(
-        //     _agreementClass,
-        //     _superToken.getUnderlyingToken(),
-        //     _ctx,
-        //     _cbdata
-        // );
+        _newCtx = _ctx;
 
         try
             poolData.afterAgreement(
                 _agreementClass,
                 _superToken.getUnderlyingToken(),
-                _ctx,
+                _newCtx,
                 _cbdata
             )
         returns (bytes memory _modCtx) {
             _newCtx = _modCtx;
         } catch (bytes memory _error) {
             console.logBytes(_error);
-            _newCtx = _ctx; // Unnecessary line ? 
         }
     }
 }

@@ -15,9 +15,9 @@ import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-cont
 // solhint-disable var-name-mixedcase
 library dHedgeStorage {
     /**
-     * @param distIndex IDA distribution index with respect to an underlying token.
      * @param superToken Contains supported supertoken of an underlying token.
-     * @param lastDeposit Latest timestamp of when an underlying token was deposited to a dHEDGE pool.
+     * @param distIndex IDA distribution index with respect to an underlying token.
+     * @param lastDepositAt Latest timestamp of when an underlying token was deposited to a dHEDGE pool.
      */
     struct TokenData {
         ISuperToken superToken;
@@ -33,7 +33,6 @@ library dHedgeStorage {
      * @param poolLogic Address of a dHEDGE pool.
      * @param latestDistIndex Latest index created for distributing DHPTx according to a deposit token stream rate
      * of a user
-     * @param feeRate Fee percentage with 6 decimals.
      * between deposits in order to guard against perpetual cooldown issues
      * @param tokenData Contains data regarding a market/deposit token
      */

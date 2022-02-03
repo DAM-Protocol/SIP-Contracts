@@ -11,9 +11,7 @@ import "./dHedgeCore.sol";
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
-    ISuperfluid private constant HOST =
-        ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
-
+    /// @dev The implementation contract for dHedgeCore can never be changed
     address public immutable implementation;
 
     /// @notice The DAO which receives fees
@@ -60,7 +58,7 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
 
         dHedgeCore(newCore).initialize(_dHedgePool, _DHPTx);
 
-        HOST.registerAppByFactory(ISuperApp(newCore), CONFIG_WORD);
+        SFHelper.HOST.registerAppByFactory(ISuperApp(newCore), CONFIG_WORD);
 
         cores[_dHedgePool] = newCore;
 
