@@ -1,12 +1,10 @@
-const { parseUnits } = require("ethers/lib/utils");
-
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-web3");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
-require('hardhat-contract-sizer');
+require("hardhat-contract-sizer");
 require("hardhat-tracer");
 require("hardhat-deploy");
 require("./tasks/dHedge-Factory-Version/CreateSIP");
@@ -19,15 +17,15 @@ require("./tasks/dHedge-Factory-Version/DeactivateCore");
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
- module.exports = {
+module.exports = {
   solidity: {
     version: "0.8.4",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
-      }
-    }
+        runs: 200,
+      },
+    },
   },
   networks: {
     hardhat: {
@@ -35,27 +33,28 @@ require("./tasks/dHedge-Factory-Version/DeactivateCore");
       forking: {
         url: process.env.POLYGON_NODE_URL,
         blockNumber: 23736635,
-        enabled: true
+        enabled: true,
       },
       blockGasLimit: 20000000,
       gasPrice: 30000000000,
       // accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
-      saveDeployments: false
+      saveDeployments: false,
     },
-    polygon :{
+    polygon: {
       url: process.env.POLYGON_NODE_URL,
       blockGasLimit: 20000000,
       gasPrice: 40000000000,
-      accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
-    }
+      accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`],
+    },
   },
   gasReporter: {
     enabled: true,
     currency: "USD",
     token: "MATIC",
     gasPrice: 100, // Set to 100 GWei
-    gasPriceApi: "https://api.polygonscan.com/api?module=proxy&action=eth_gasPrice",
-    showTimeSpent: true
+    gasPriceApi:
+      "https://api.polygonscan.com/api?module=proxy&action=eth_gasPrice",
+    showTimeSpent: true,
   },
   etherscan: {
     apiKey: process.env.POLYGONSCAN_KEY,
@@ -63,14 +62,14 @@ require("./tasks/dHedge-Factory-Version/DeactivateCore");
   contractSizer: {
     alphaSort: true,
     disambiguatePaths: false,
-    runOnCompile: true
+    runOnCompile: true,
   },
   namedAccounts: {
     deployer: {
-      default: "0x452181dAe31Cf9f42189df71eC64298993BEe6d3"
-    }
+      default: "0x452181dAe31Cf9f42189df71eC64298993BEe6d3",
+    },
   },
   mocha: {
-    timeout: 0
-  }
+    timeout: 0,
+  },
 };

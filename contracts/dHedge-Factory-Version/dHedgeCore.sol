@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
 
-import {ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
-import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
-import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
-import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
+import { ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
+import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+import { SuperAppBase } from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -89,6 +89,17 @@ contract dHedgeCore is Initializable, SuperAppBase {
         require(!poolData.isActive, "dHedgeCore: Pool already active");
 
         poolData.isActive = true;
+    }
+
+    /// @notice Closes a supertoken stream if core is jailed or user is running low on balance
+    /// @param _superToken Supertoken being streamed
+    /// @param _user Address of the user whose stream needs to be closed
+    /// @dev Any user's stream can be closed by anyone provided the app is jailed
+    /// or user doesn't have enough amount to stream for more than 12 hours
+    function emergencyCloseStream(ISuperToken _superToken, address _user)
+        external
+    {
+        _superToken.emergencyCloseStream(_user);
     }
 
     /// @notice Checks if the core is active or not
@@ -247,7 +258,10 @@ contract dHedgeCore is Initializable, SuperAppBase {
             //     tokenData.distIndex
             // );
 
-            _newCtx = poolData.DHPTx.createIndexInCallback(tokenData.distIndex, _newCtx);
+            _newCtx = poolData.DHPTx.createIndexInCallback(
+                tokenData.distIndex,
+                _newCtx
+            );
 
             IERC20(_underlyingToken).safeIncreaseAllowance(
                 poolData.poolLogic,

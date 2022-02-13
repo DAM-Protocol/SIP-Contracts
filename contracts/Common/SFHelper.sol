@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
 
-import {ISuperfluid, ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
-import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
-import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+import { ISuperfluid, ISuperToken, ISuperApp } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
+import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 import "hardhat/console.sol";
 
 /**
@@ -125,6 +125,46 @@ library SFHelper {
             new bytes(0),
             _ctx
         );
+    }
+
+    /**
+     * @dev Function to close a stream
+     * @dev This function should be called provided the app is jailed or user is running low on supertokens
+     * @param _superToken The supertoken that the user is streaming
+     * @param _user Address of the user
+     */
+    function emergencyCloseStream(ISuperToken _superToken, address _user)
+        external
+    {
+        bool _close;
+
+        // Check whether the app is jailed and if so, proceed with stream termination
+        if (HOST.isAppJailed(ISuperApp(address(this)))) _close = true;
+        else {
+            int96 _flowRate = CFA_V1.getNetFlow(_superToken, _user);
+
+            if (_flowRate < 0) {
+                uint256 _balance = _superToken.balanceOf(_user);
+                uint256 _positiveFlowRate = uint256(uint96(-1 * _flowRate));
+
+                // if user has less liquidity ( <= 12 hours worth) close the stream
+                if (_balance <= _positiveFlowRate * 12 hours) _close = true;
+            }
+        }
+
+        if (_close) {
+            HOST.callAgreement(
+                CFA_V1,
+                abi.encodeWithSelector(
+                    CFA_V1.deleteFlow.selector,
+                    _superToken,
+                    _user,
+                    address(this),
+                    new bytes(0) // placeholder
+                ),
+                "0x"
+            );
+        } else revert("No emergency close");
     }
 
     /**
