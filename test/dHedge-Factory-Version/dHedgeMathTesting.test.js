@@ -142,8 +142,6 @@ describe("dHedgeCore Math Testing", function () {
 
     app = await ethers.getContractAt("dHedgeCore", newCore);
 
-    // await factory.connect(admin).transferOwnership(DAO.address);
-
     await PoolFactoryContract.connect(dHEDGEOwner).addTransferWhitelist(
       newCore
     );
@@ -206,6 +204,31 @@ describe("dHedgeCore Math Testing", function () {
       receiver: admin.address,
       amount: parseUnits("1000", 18),
     }).exec(DAIWhale);
+
+    await USDCx.approve({
+      receiver: app.address,
+      amount: parseUnits("1000", 18),
+    }).exec(USDCWhale);
+
+    await DAIx.approve({
+      receiver: app.address,
+      amount: parseUnits("1000", 18),
+    }).exec(DAIWhale);
+
+    await DAIx.approve({
+      receiver: app.address,
+      amount: parseUnits("1000", 18),
+    }).exec(DAIWhale2);
+
+    await USDCx.approve({
+      receiver: app.address,
+      amount: parseUnits("1000", 18),
+    }).exec(admin);
+
+    await DAIx.approve({
+      receiver: app.address,
+      amount: parseUnits("1000", 18),
+    }).exec(admin);
   }
 
   async function startAndSub(wallet, tokenObj, userFlowRate) {
@@ -265,23 +288,31 @@ describe("dHedgeCore Math Testing", function () {
   it("Should be able to close a stream if user is low on supertokens", async () => {
     await loadFixture(setupEnv);
 
-    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
-    await increaseTime(getSeconds(29.5));
+    await increaseTime(getSeconds(29) + 3600 * 13);
 
-    // TODO
+    await app.emergencyCloseStream(USDC.superToken, USDCWhale.address);
+
+    await startAndSub(DAIWhale, DAI, userFlowRate);
+
+    await increaseTime(getSeconds(1));
+
+    await expect(
+      app.emergencyCloseStream(DAI.superToken, DAIWhale.address)
+    ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
   it("Should be able to calculate uninvested amount correctly - 1", async () => {
     await loadFixture(setupEnv);
 
-    userFlowRate = parseUnits("10000", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
-    await increaseTime(getSeconds(29));
+    await increaseTime(getSeconds(30));
 
     currUninvested = await app.calcUserUninvested(
       USDCWhale.address,
@@ -976,7 +1007,7 @@ describe("dHedgeCore Math Testing", function () {
 
     expect(
       getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
-    ).to.be.closeTo(parseUnits("3", 18), parseUnits("1", 18));
+    ).to.be.closeTo(parseUnits("1", 18), parseUnits("1", 18));
 
     await increaseTime(getSeconds(1));
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
 
-import {IPoolLogic, IPoolManagerLogic} from "../Interfaces/IdHedge.sol";
-import {IdHedgeCoreFactory} from "../Interfaces/IdHedgeCoreFactory.sol";
+import { IPoolLogic, IPoolManagerLogic } from "../Interfaces/IdHedge.sol";
+import { IdHedgeCoreFactory } from "../Interfaces/IdHedgeCoreFactory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -151,9 +151,36 @@ library dHedgeHelper {
         ) {
             address _sender = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
+
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
+            (, int96 _flowRate) = tokenData.superToken.getFlow(_sender);
+            uint256 _currFlowRate = uint256(uint96(_flowRate));
+            
+            assert(
+                _userUninvested <= tokenData.superToken.balanceOf(address(this))
+            );
+
+            // Return some amount if previous flow rate was higher than the current one after update
+            uint256 _depositAmount = (block.timestamp -
+                tokenData.lastDepositAt) * _currFlowRate;
+
+            bool success;
+            if (_depositAmount > _userUninvested) {
+                success = tokenData.superToken.transferFrom(
+                    _sender,
+                    address(this),
+                    _depositAmount - _userUninvested
+                );
+            } else if (_depositAmount < _userUninvested) {
+                success = tokenData.superToken.transfer(
+                    _sender,
+                    _userUninvested - _depositAmount
+                );
+            }
+
+            require(success, "dHedgeHelper: Buffer transfer failed");
 
             _newCtx = tokenData.superToken.updateSharesInCallback(
                 _dHedgePool.DHPTx,
@@ -161,14 +188,11 @@ library dHedgeHelper {
                 _newCtx
             );
 
-            assert(
-                _userUninvested <= tokenData.superToken.balanceOf(address(this))
-            );
 
-            require(
-                tokenData.superToken.transfer(_sender, _userUninvested),
-                "dHedgeHelper: Uninvested amount transfer failed"
-            );
+            // require(
+            //     tokenData.superToken.transfer(_sender, _userUninvested),
+            //     "dHedgeHelper: Uninvested amount transfer failed"
+            // );
         }
     }
 

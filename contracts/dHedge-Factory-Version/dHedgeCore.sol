@@ -20,6 +20,7 @@ import "hardhat/console.sol";
  * @notice Contains user facing functions
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
+// solhint-disable not-rely-on-time
 // solhint-disable reason-string
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
@@ -155,6 +156,25 @@ contract dHedgeCore is Initializable, SuperAppBase {
         return poolData.requireUpkeep();
     }
 
+    // function _transferBuffer(
+    //     ISuperToken _superToken,
+    //     uint256 _lastDepositAt,
+    //     bytes memory _ctx
+    // ) internal {
+    //     address _user = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+
+    //     (, int96 _flowRate) = _superToken.getFlow(_user);
+
+    //     require(
+    //         _superToken.transferFrom(
+    //             _user,
+    //             address(this),
+    //             (block.timestamp - _lastDepositAt) * uint256(uint96(_flowRate))
+    //         ),
+    //         "dHedgeCore: Buffer transfer failed"
+    //     );
+    // }
+
     /// @dev Checks status of the core and reverts if inactive
     function _onlyActive() internal view {
         require(poolData.isActive, "dHedgeCore: Pool inactive");
@@ -252,6 +272,9 @@ contract dHedgeCore is Initializable, SuperAppBase {
             tokenData.superToken = _superToken;
             tokenData.distIndex = poolData.latestDistIndex++;
 
+            // To calculate amount streamed after deployment but before first deposit
+            tokenData.lastDepositAt = block.timestamp; 
+
             // console.log(
             //     "Index for token %s: %s",
             //     _underlyingToken,
@@ -268,6 +291,21 @@ contract dHedgeCore is Initializable, SuperAppBase {
                 type(uint256).max
             );
         }
+
+        // An upfront fee must be charged to avoid a user getting shares that might make them eligible to
+        // receive profit even though they haven't streamed much.
+        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
+
+        (, int96 _flowRate) = _superToken.getFlow(_user);
+
+        require(
+            _superToken.transferFrom(
+                _user,
+                address(this),
+                (block.timestamp - tokenData.lastDepositAt) * uint256(uint96(_flowRate))
+            ),
+            "dHedgeCore: Buffer transfer failed"
+        );
 
         _newCtx = _superToken.updateSharesInCallback(
             poolData.DHPTx,
@@ -312,6 +350,15 @@ contract dHedgeCore is Initializable, SuperAppBase {
             _newCtx,
             _cbdata
         );
+
+        // We are directly using `getUnderlyingToken` method because to update a flow, the flow first must
+        // have been created during which this supertoken was mapped to the underlying token 
+        // i.e., this supertoken is acceptable to us
+        // _transferBuffer(
+        //     _superToken,
+        //     poolData.tokenData[_superToken.getUnderlyingToken()].lastDepositAt,
+        //     _newCtx
+        // );
     }
 
     /// @dev Remove internal checker functions and instead use if-else

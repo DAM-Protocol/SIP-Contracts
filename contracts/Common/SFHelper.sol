@@ -147,6 +147,8 @@ library SFHelper {
                 uint256 _balance = _superToken.balanceOf(_user);
                 uint256 _positiveFlowRate = uint256(uint96(-1 * _flowRate));
 
+                // console.log("Balance: %s, +flowRate: %s", _balance, _positiveFlowRate);
+
                 // if user has less liquidity ( <= 12 hours worth) close the stream
                 if (_balance <= _positiveFlowRate * 12 hours) _close = true;
             }
@@ -164,7 +166,7 @@ library SFHelper {
                 ),
                 "0x"
             );
-        } else revert("No emergency close");
+        } else revert("SFHelper: No emergency close");
     }
 
     /**
