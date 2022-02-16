@@ -285,6 +285,14 @@ describe("dHedgeCore Math Testing", function () {
     return currDHPTxBal;
   }
 
+  /**
+   * This test is for the function `emergencyCloseStream` in `dHedgeCore` contract.
+   * The logic for the function resides in `SFHelper` contract.
+   * This function should only close a user's stream if they don't have enough liquidity to
+   * last for more than 12 hours.
+   * @dev Ideally we would have liked to test for app jail scenario but by design, it shouldn't fail.
+   * Maybe we can create a mock contract which can be jailed and then test if this function works ?
+   */
   it("Should be able to close a stream if user is low on supertokens", async () => {
     await loadFixture(setupEnv);
 
@@ -292,34 +300,52 @@ describe("dHedgeCore Math Testing", function () {
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
-    await increaseTime(getSeconds(29) + 3600 * 13);
+    // await increaseTime(getSeconds(29) + 3600 * 13);
 
+    // Increase time by 29 and a half days.
+    await increaseTime(getSeconds(29.5));
+
+    // This line shouldn't throw any error as it is expected to close the stream of the USDCWhale
     await app.emergencyCloseStream(USDC.superToken, USDCWhale.address);
 
     await startAndSub(DAIWhale, DAI, userFlowRate);
 
+    // Increase time by a day
     await increaseTime(getSeconds(1));
 
+    // DAIWhale has a balance of 9000 DAIx before start of the stream and after a day of streaming
+    // the balance should still be sufficient to last the stream for more than 12 hours
     await expect(
       app.emergencyCloseStream(DAI.superToken, DAIWhale.address)
     ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
-  it("Should be able to calculate uninvested amount correctly - 1", async () => {
+  /**
+   * This test is for the function `calcUserUninvested` in `dHedgeCore` contract.
+   * The function's logic lies in both `dHedgeHelper` and `SFHelper` contracts.
+   * This function should be able to calculate uninvested amount share of a user after they start, update or terminate
+   * their streams.
+   * In this test, we don't trigger dHedge deposit.
+   * @dev When a stream is created, updated or terminated some amount is either taken from the user or transferred
+   * to the user. We have to check if these amounts are as expected.
+   */
+  it("Should be able to calculate uninvested amount correctly (no deposit)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
+    // Increase time by a month
     await increaseTime(getSeconds(30));
 
     currUninvested = await app.calcUserUninvested(
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount: ", currUninvested.toString());
+    // console.log("Current uninvested amount: ", currUninvested.toString());
 
+    // We expect the uninvested amount to equal the amount of USDCx we streamed (in this case 100 USDCx)
     expect(currUninvested).to.be.closeTo(
       parseUnits("100", 18),
       parseUnits("1", 18)
@@ -335,14 +361,16 @@ describe("dHedgeCore Math Testing", function () {
       })
       .exec(USDCWhale);
 
+    // Increase time by a month
     await increaseTime(getSeconds(30));
 
     currUninvested = await app.calcUserUninvested(
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount: ", currUninvested.toString());
+    // console.log("Current uninvested amount: ", currUninvested.toString());
 
+    // We expect the uninvested amount to equal the amount of USDCx we streamed after updating (in this case 20 USDCx)
     expect(currUninvested).to.be.closeTo(
       parseUnits("20", 18),
       parseUnits("1", 18)
@@ -356,16 +384,20 @@ describe("dHedgeCore Math Testing", function () {
       })
       .exec(USDCWhale);
 
+    // Increase time by a month
     await increaseTime(getSeconds(30));
 
     currUninvested = await app.calcUserUninvested(
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
+    // We expect the uninvested amount to be 0 in this case as we already returned uninvested amount after the stream
+    // was updated
     expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
+    // Now we will test for the same conditions again
     userFlowRate = parseUnits("50", 18).div(getBigNumber(getSeconds(30)));
 
     await sf.cfaV1
@@ -405,7 +437,7 @@ describe("dHedgeCore Math Testing", function () {
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
     expect(currUninvested).to.be.closeTo(
       parseUnits("30", 18),
@@ -426,30 +458,40 @@ describe("dHedgeCore Math Testing", function () {
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
     expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
-  it("Should be able to calculate uninvested amount correctly - 2", async () => {
+  /**
+   * This test is for the same function as the above test.
+   * @dev In this test we are also triggering dHedge deposit and then checking whether the function works
+   * as expected.
+   */
+  it("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
+    // Increase time by a day
     await increaseTime(getSeconds(1));
 
+    // Make a deposit to the dHedge pool
     await app.dHedgeDeposit(USDCContract.address);
 
+    // Increase time by a day again
     await increaseTime(getSeconds(1));
 
     currUninvested = await app.calcUserUninvested(
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
+    // We expect the uninvested amount to equal streamed amount after deposit was made
+    // Since we streamed for one day after the deposit, expected is 3 USDCx (@ 90 USDCx/mo)
     expect(currUninvested).to.be.closeTo(
       parseUnits("3", 18),
       parseUnits("1", 18)
@@ -475,8 +517,10 @@ describe("dHedgeCore Math Testing", function () {
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
+    // We expect the uninvested amount to equal streamed amount after deposit was made
+    // Since we streamed for one day after the deposit, expected is 2 USDCx (@ 60 USDCx/mo)
     expect(currUninvested).to.be.closeTo(
       parseUnits("2", 18),
       parseUnits("1", 18)
@@ -490,10 +534,14 @@ describe("dHedgeCore Math Testing", function () {
       })
       .exec(USDCWhale);
 
+    // We expect the uninvested amount to equal 0 because after termination, the uninvested amount
+    // of a user was returned.
     expect(
       await app.calcUserUninvested(USDCWhale.address, USDCContract.address)
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
+    // This is redundant but has been put in just in case if the stream wasn't really terminated
+    // This will probably never happen
     await increaseTime(getSeconds(5));
 
     userFlowRate = parseUnits("30", 18).div(getBigNumber(3600 * 24 * 30));
@@ -506,6 +554,7 @@ describe("dHedgeCore Math Testing", function () {
       })
       .exec(USDCWhale);
 
+    // We expect the uninvested amount to equal 0 as there wasn't any stream prior to our stream creation.
     expect(
       await app.calcUserUninvested(admin.address, USDCContract.address)
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
@@ -520,28 +569,33 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
+    // We expect the uninvested amount to equal streamed amount after deposit was made
+    // Since we streamed for one day after the deposit, expected is 1 USDCx (@ 30 USDCx/mo)
     expect(currUninvested).to.be.closeTo(
       parseUnits("1", 18),
       parseUnits("1", 18)
     );
+
+    // Note: We have skipped the conditions to be checked for such as updation and termination of streams.
+    // It can be written later but isn't really expected to cause a problem now as the prior test takes care of it.
   });
 
-  it("Should be able to calculate uninvested amount correctly (multi-token streaming) - 1", async () => {
+  /**
+   * This test is for the same function as the above to two tests.
+   * @dev In this test we are streaming multiple tokens by a single account.
+   * @dev Deposits are not done in this test.
+   * Skipped comments for conditions as they are pretty much similar as in the above two tests
+   */
+  it("Should be able to calculate uninvested amount correctly (multi-token streaming with no deposits)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(admin, USDC, userFlowRate);
 
-    console.log("Reaches here 1");
-
     await startAndSub(admin, DAI, userFlowRate);
-
-    console.log("Reaches here 2");
-
-    // process.exit(0);
 
     await increaseTime(getSeconds(30));
 
@@ -553,14 +607,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       parseUnits("60", 18),
@@ -599,14 +653,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       parseUnits("20", 18),
@@ -643,14 +697,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       constants.Zero,
@@ -689,14 +743,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       parseUnits("50", 18),
@@ -735,14 +789,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       parseUnits("30", 18),
@@ -779,14 +833,14 @@ describe("dHedgeCore Math Testing", function () {
       admin.address,
       DAIContract.address
     );
-    console.log(
-      "Current uninvested USDC amount: ",
-      currUninvestedUSDC.toString()
-    );
-    console.log(
-      "Current uninvested DAI amount: ",
-      currUninvestedDAI.toString()
-    );
+    // console.log(
+    //   "Current uninvested USDC amount: ",
+    //   currUninvestedUSDC.toString()
+    // );
+    // console.log(
+    //   "Current uninvested DAI amount: ",
+    //   currUninvestedDAI.toString()
+    // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
       constants.Zero,
@@ -798,184 +852,9 @@ describe("dHedgeCore Math Testing", function () {
     );
   });
 
-  it("Should be able to calculate a user's share correctly (single-token)", async () => {
-    await loadFixture(setupEnv);
-
-    console.log("\n--Manual verification required for this test--\n");
-
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
-
-    await startAndSub(admin, USDC, userFlowRate);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-
-    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(admin);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: admin.address,
-        receiver: app.address,
-      })
-      .exec(admin);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-  });
-
-  it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
-    await loadFixture(setupEnv);
-
-    console.log("\n--Manual verification required for this test--\n");
-
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
-
-    await startAndSub(admin, USDC, userFlowRate);
-    await startAndSub(admin, DAI, userFlowRate);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(DAIContract.address);
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-
-    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(admin);
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: DAI.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(admin);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(DAIContract.address);
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: admin.address,
-        receiver: app.address,
-      })
-      .exec(admin);
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: DAI.superToken,
-        sender: admin.address,
-        receiver: app.address,
-      })
-      .exec(admin);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(DAIContract.address);
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-  });
-
-  it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
-    await loadFixture(setupEnv);
-
-    console.log("\n--Manual verification required for this test--\n");
-
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
-
-    await startAndSub(admin, USDC, userFlowRate);
-    await startAndSub(USDCWhale, USDC, userFlowRate);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-
-    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(admin);
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: admin.address,
-        receiver: app.address,
-      })
-      .exec(admin);
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhale.address,
-        receiver: app.address,
-      })
-      .exec(USDCWhale);
-
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-  });
-
+  /**
+   * This test is validates if the uninvested amount of a user is being correctly returned after stream updates/termination.
+   */
   it("should return uninvested amount after stream updation/termination", async () => {
     await loadFixture(setupEnv);
 
@@ -1032,6 +911,246 @@ describe("dHedgeCore Math Testing", function () {
     expect(
       getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
     ).to.be.closeTo(parseUnits("2", 18), parseUnits("1", 18));
+  });
+
+  /**
+   * This function tests whether the DHP tokens have been distributed after deposit.
+   * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
+   * - They should ideally match.
+   */
+  it.only("Should be able to calculate a user's share correctly (single-token)", async () => {
+    await loadFixture(setupEnv);
+
+    console.log("\n--Manual verification required for this test--\n");
+
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+
+    await startAndSub(admin, USDC, userFlowRate);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+
+    // Ideally, no DHP tokens should be left in the contract
+    // although some amount can be left due to rounding errors.
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(admin);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+
+    // Ideally, no DHP tokens should be left in the contract
+    // although some amount can be left due to rounding errors.
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    // Following commented block isn't really necessary as no deposit will be made anyway (no stream exists and no uninvested amount too)
+    // await sf.cfaV1
+    //   .deleteFlow({
+    //     superToken: USDC.superToken,
+    //     sender: admin.address,
+    //     receiver: app.address,
+    //   })
+    //   .exec(admin);
+
+    // await increaseTime(getSeconds(30));
+
+    // await app.dHedgeDeposit(USDCContract.address);
+
+    // await printDHPTxBalance(admin.address);
+  });
+
+  /**
+   * This function tests whether the DHP tokens have been distributed after deposit.
+   * Same as the above test case but for multiple streams of multiple tokens by a single user.
+   * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
+   * - They should ideally match.
+   */
+  it.only("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
+    await loadFixture(setupEnv);
+
+    console.log("\n--Manual verification required for this test--\n");
+
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+
+    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, DAI, userFlowRate);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(DAIContract.address);
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+
+    // Ideally, no DHP tokens should be left in the contract
+    // although some amount can be left due to rounding errors.
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(admin);
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: DAI.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(admin);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(DAIContract.address);
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+
+    // Ideally, no DHP tokens should be left in the contract
+    // although some amount can be left due to rounding errors.
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    // await sf.cfaV1
+    //   .deleteFlow({
+    //     superToken: USDC.superToken,
+    //     sender: admin.address,
+    //     receiver: app.address,
+    //   })
+    //   .exec(admin);
+
+    // await sf.cfaV1
+    //   .deleteFlow({
+    //     superToken: DAI.superToken,
+    //     sender: admin.address,
+    //     receiver: app.address,
+    //   })
+    //   .exec(admin);
+
+    // await increaseTime(getSeconds(30));
+
+    // await app.dHedgeDeposit(DAIContract.address);
+    // await app.dHedgeDeposit(USDCContract.address);
+
+    // await printDHPTxBalance(admin.address);
+  });
+
+  it.only("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
+    await loadFixture(setupEnv);
+
+    console.log("\n--Manual verification required for this test--\n");
+
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+
+    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(USDCWhale, USDC, userFlowRate);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(USDCWhale.address);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(admin);
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(USDCWhale);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(USDCWhale.address);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: admin.address,
+        receiver: app.address,
+      })
+      .exec(admin);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: USDCWhale.address,
+        receiver: app.address,
+      })
+      .exec(USDCWhale);
+
+    await increaseTime(getSeconds(30));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(USDCWhale.address);
   });
 
   it("should calculate fees correctly", async () => {
