@@ -320,6 +320,81 @@ describe("dHedgeCore Math Testing", function () {
     ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
+  it("Should take/give correct amount of upfront fee (single depositor)", async () => {
+    await loadFixture(setupEnv);
+
+    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
+
+    await startAndSub(USDCWhale, USDC, userFlowRate);
+
+    // Increase time by a month
+    await increaseTime(getSeconds(30));
+
+    balanceBefore = await USDCx.balanceOf({
+      account: USDCWhale.address,
+      providerOrSigner: ethersProvider,
+    });
+
+    userFlowRate = parseUnits("200", 18).div(getBigNumber(getSeconds(30)));
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(USDCWhale);
+
+    balanceAfter = await USDCx.balanceOf({
+      account: USDCWhale.address,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(
+      getBigNumber(balanceBefore).sub(getBigNumber(balanceAfter))
+    ).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+
+    userFlowRate = parseUnits("50", 18).div(getBigNumber(getSeconds(30)));
+
+    balanceBefore = balanceAfter;
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(USDCWhale);
+
+    balanceAfter = await USDCx.balanceOf({
+      account: USDCWhale.address,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(
+      getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
+    ).to.be.closeTo(parseUnits("150", 18), parseUnits("1", 18));
+
+    balanceBefore = balanceAfter;
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: USDCWhale.address,
+        receiver: app.address,
+      })
+      .exec(USDCWhale);
+
+    balanceAfter = await USDCx.balanceOf({
+      account: USDCWhale.address,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(
+      getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
+    ).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+  });
+
   /**
    * This test is for the function `calcUserUninvested` in `dHedgeCore` contract.
    * The function's logic lies in both `dHedgeHelper` and `SFHelper` contracts.
@@ -353,6 +428,11 @@ describe("dHedgeCore Math Testing", function () {
 
     userFlowRate = parseUnits("20", 18).div(getBigNumber(getSeconds(30)));
 
+    // balanceBefore = await USDCx.balanceOf({
+    //   account: USDCWhale.address,
+    //   providerOrSigner: ethersProvider,
+    // });
+
     await sf.cfaV1
       .updateFlow({
         superToken: USDC.superToken,
@@ -360,6 +440,13 @@ describe("dHedgeCore Math Testing", function () {
         flowRate: userFlowRate,
       })
       .exec(USDCWhale);
+
+    // balanceAfter = await USDCx.balanceOf({
+    //   account: USDCWhale.address,
+    //   providerOrSigner: ethersProvider,
+    // });
+
+    // expect(getBigNumber(balanceBefore).sub(getBigNumber(balanceAfter))).to.be.closeTo(parseUnits(""))
 
     // Increase time by a month
     await increaseTime(getSeconds(30));
@@ -370,9 +457,11 @@ describe("dHedgeCore Math Testing", function () {
     );
     // console.log("Current uninvested amount: ", currUninvested.toString());
 
-    // We expect the uninvested amount to equal the amount of USDCx we streamed after updating (in this case 20 USDCx)
+    // We expect the uninvested amount to equal:
+    // - the amount of USDCx we streamed after updating (in this case 20 USDCx) +
+    // - the amount of USDCx taken as an upfront fee during updation of stream (in this case another 20 USDCx)
     expect(currUninvested).to.be.closeTo(
-      parseUnits("20", 18),
+      parseUnits("40", 18),
       parseUnits("1", 18)
     );
 
@@ -414,10 +503,10 @@ describe("dHedgeCore Math Testing", function () {
       USDCWhale.address,
       USDCContract.address
     );
-    console.log("Current uninvested amount", currUninvested.toString());
+    // console.log("Current uninvested amount", currUninvested.toString());
 
     expect(currUninvested).to.be.closeTo(
-      parseUnits("50", 18),
+      parseUnits("200", 18),
       parseUnits("1", 18)
     );
 
@@ -439,8 +528,11 @@ describe("dHedgeCore Math Testing", function () {
     );
     // console.log("Current uninvested amount", currUninvested.toString());
 
+    // We expect the uninvested amount to equal:
+    // - the amount of USDCx we streamed after updating (in this case 30 USDCx) +
+    // - the amount of USDCx taken as an upfront fee during updation of stream (in this case another 120 USDCx)
     expect(currUninvested).to.be.closeTo(
-      parseUnits("30", 18),
+      parseUnits("150", 18),
       parseUnits("1", 18)
     );
 
@@ -662,12 +754,15 @@ describe("dHedgeCore Math Testing", function () {
     //   currUninvestedDAI.toString()
     // );
 
+    // We expect the uninvested amount to equal:
+    // - the amount of USDCx/DAIx we streamed after updating (in this case 20 USDCx/DAIx) +
+    // - the amount of USDCx/DAIx taken as an upfront fee during updation of stream (in this case another 20 USDCx/DAIx)
     expect(currUninvestedUSDC).to.be.closeTo(
-      parseUnits("20", 18),
+      parseUnits("40", 18),
       parseUnits("1", 18)
     );
     expect(currUninvestedDAI).to.be.closeTo(
-      parseUnits("20", 18),
+      parseUnits("40", 18),
       parseUnits("1", 18)
     );
 
@@ -753,11 +848,11 @@ describe("dHedgeCore Math Testing", function () {
     // );
 
     expect(currUninvestedUSDC).to.be.closeTo(
-      parseUnits("50", 18),
+      parseUnits("200", 18),
       parseUnits("1", 18)
     );
     expect(currUninvestedDAI).to.be.closeTo(
-      parseUnits("50", 18),
+      parseUnits("200", 18),
       parseUnits("1", 18)
     );
 
@@ -798,12 +893,15 @@ describe("dHedgeCore Math Testing", function () {
     //   currUninvestedDAI.toString()
     // );
 
+    // We expect the uninvested amount to equal:
+    // - the amount of USDCx/DAIx we streamed after updating (in this case 30 USDCx) +
+    // - the amount of USDCx/DAIx taken as an upfront fee during updation of stream (in this case another 120 USDCx)
     expect(currUninvestedUSDC).to.be.closeTo(
-      parseUnits("30", 18),
+      parseUnits("150", 18),
       parseUnits("1", 18)
     );
     expect(currUninvestedDAI).to.be.closeTo(
-      parseUnits("30", 18),
+      parseUnits("150", 18),
       parseUnits("1", 18)
     );
 
@@ -884,9 +982,11 @@ describe("dHedgeCore Math Testing", function () {
       providerOrSigner: ethersProvider,
     });
 
+    // We expect the returned amount to equal the upfront fee only (in this case 1 USDCx as we already streamed 3 USDCx)
+    // Hence, 1 USDCx is returned (as the updated stream rate is lesser than creation stream rate)
     expect(
       getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
-    ).to.be.closeTo(parseUnits("1", 18), parseUnits("1", 18));
+    ).to.be.closeTo(parseUnits("1", 18), parseUnits("0.5", 18));
 
     await increaseTime(getSeconds(1));
 
@@ -908,9 +1008,12 @@ describe("dHedgeCore Math Testing", function () {
       providerOrSigner: ethersProvider,
     });
 
+    // We expect the returned amount to equal:
+    // - the amount of USDCx we streamed after updating and before deleting (in this case 2 USDCx) +
+    // - the amount of USDCx given equal to upfront fee during updation of stream (in this case another 2 USDCx)
     expect(
       getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
-    ).to.be.closeTo(parseUnits("2", 18), parseUnits("1", 18));
+    ).to.be.closeTo(parseUnits("4", 18), parseUnits("0.5", 18));
   });
 
   /**
@@ -918,7 +1021,7 @@ describe("dHedgeCore Math Testing", function () {
    * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
    * - They should ideally match.
    */
-  it.only("Should be able to calculate a user's share correctly (single-token)", async () => {
+  it("Should be able to calculate a user's share correctly (single-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -989,7 +1092,7 @@ describe("dHedgeCore Math Testing", function () {
    * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
    * - They should ideally match.
    */
-  it.only("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
+  it("Should be able to calculate a user's share correctly (single-user-multi-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -1073,7 +1176,7 @@ describe("dHedgeCore Math Testing", function () {
     // await printDHPTxBalance(admin.address);
   });
 
-  it.only("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
+  it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");

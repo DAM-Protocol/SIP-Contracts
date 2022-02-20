@@ -181,20 +181,21 @@ library SFHelper {
         address _user,
         uint256 _lastDepositAt
     ) external view returns (uint256) {
-        (uint256 _userPrevUpdateTimestamp, int96 _flowRate) = getFlow(
+        (/* uint256 _userPrevUpdateTimestamp */, int96 _flowRate) = getFlow(
             _superToken,
             _user
         );
         uint256 _userFlowRate = uint256(uint96(_flowRate));
 
-        return
-            _userFlowRate *
-            (block.timestamp -
-                (
-                    (_userPrevUpdateTimestamp > _lastDepositAt)
-                        ? _userPrevUpdateTimestamp
-                        : _lastDepositAt
-                ));
+        // return
+        //     _userFlowRate *
+        //     (block.timestamp -
+        //         (
+        //             (_userPrevUpdateTimestamp > _lastDepositAt)
+        //                 ? _userPrevUpdateTimestamp
+        //                 : _lastDepositAt
+        //         ));
+        return _userFlowRate * (block.timestamp - _lastDepositAt);
     }
 
     /**

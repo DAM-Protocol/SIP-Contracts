@@ -168,12 +168,16 @@ library dHedgeHelper {
 
             bool success;
             if (_depositAmount > _userUninvested) {
+                // console.log("Reached here 1");
+
                 success = tokenData.superToken.transferFrom(
                     _sender,
                     address(this),
                     _depositAmount - _userUninvested
                 );
             } else if (_depositAmount < _userUninvested) {
+                // console.log("Reached here 2");
+
                 success = tokenData.superToken.transfer(
                     _sender,
                     _userUninvested - _depositAmount
