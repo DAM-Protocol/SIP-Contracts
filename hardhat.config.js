@@ -43,7 +43,7 @@ module.exports = {
     polygon: {
       url: process.env.POLYGON_NODE_URL,
       blockGasLimit: 20000000,
-      gasPrice: 40000000000,
+      gasPrice: 35000000000,
       accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`],
     },
   },

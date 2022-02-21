@@ -158,6 +158,7 @@ library dHedgeHelper {
             (, int96 _flowRate) = tokenData.superToken.getFlow(_sender);
             uint256 _currFlowRate = uint256(uint96(_flowRate));
             
+            // Not really necessary ?
             assert(
                 _userUninvested <= tokenData.superToken.balanceOf(address(this))
             );
