@@ -8,7 +8,7 @@ import "hardhat/console.sol";
 
 /**
  * @title Superfluid helper library
- * @author rashtrakoff
+ * @author rashtrakoff <rashtrakoff@pm.me>
  * @dev Contains functions which help in interacting with Superfluid contracts
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */

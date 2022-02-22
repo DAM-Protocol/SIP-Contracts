@@ -16,7 +16,7 @@ import "hardhat/console.sol";
 
 /**
  * @title Core contract for streaming into a dHedge pool
- * @author rashtrakoff
+ * @author rashtrakoff <rashtrakoff@pm.me>
  * @notice Contains user facing functions
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */

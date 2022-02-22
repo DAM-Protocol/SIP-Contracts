@@ -20,7 +20,7 @@ interface IERC20Mod {
 
 /**
  * @title dHedge helper library
- * @author rashtrakoff
+ * @author rashtrakoff <rashtrakoff@pm.me>
  * @dev Contains functions for interacting with dHedge protocol pools
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
@@ -83,11 +83,13 @@ library dHedgeHelper {
                 // Store the timestamp of last time a deposit & distribution was made
                 tokenData.lastDepositAt = block.timestamp;
 
-                // Transfer the fees collected to the owner
-                IERC20(_depositToken).safeTransfer(
-                    IdHedgeCoreFactory(_dHedgePool.factory).dao(),
-                    _feeCollected
-                );
+                // Transfer the fees collected to the owner only if it's greater than 0
+                if (_feeCollected > 0) {
+                    IERC20(_depositToken).safeTransfer(
+                        IdHedgeCoreFactory(_dHedgePool.factory).dao(),
+                        _feeCollected
+                    );
+                }
 
                 // Deposit the tokens into the dHedge pool
                 uint256 _liquidityMinted = _poolLogic.deposit(
@@ -157,8 +159,7 @@ library dHedgeHelper {
             ];
             (, int96 _flowRate) = tokenData.superToken.getFlow(_sender);
             uint256 _currFlowRate = uint256(uint96(_flowRate));
-            
-            // Not really necessary ?
+
             assert(
                 _userUninvested <= tokenData.superToken.balanceOf(address(this))
             );
@@ -192,7 +193,6 @@ library dHedgeHelper {
                 tokenData.distIndex,
                 _newCtx
             );
-
 
             // require(
             //     tokenData.superToken.transfer(_sender, _userUninvested),

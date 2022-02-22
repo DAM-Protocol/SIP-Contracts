@@ -8,6 +8,13 @@ import "@openzeppelin/contracts/proxy/Clones.sol";
 import "./Interfaces/IdHedgeCoreFactory.sol";
 import "./dHedgeCore.sol";
 
+/**
+ * @title dHedge core factory
+ * @author rashtrakoff <rashtrakoff@pm.me>
+ * @notice Contract to create new cores easily
+ * @dev Some variables necessary/common for all cores are stored here. 
+ * These variables are referred in the cores.
+ */
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
@@ -40,6 +47,8 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
         emit FeeRateChanged(_defaultFeeRate);
     }
 
+    /// @dev Sets DAO address for all cores
+    /// @param _dao New address for the DAO
     function setDAOAddress(address _dao) external onlyOwner {
         dao = _dao;
 

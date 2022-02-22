@@ -7,7 +7,7 @@ import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-cont
 
 /**
  * @title dHedge storage library
- * @author rashtrakoff
+ * @author rashtrakoff <rashtrakoff@pm.me>
  * @dev Contains a struct which defines a dHedge pool for a core contract
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
