@@ -28,7 +28,7 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
       SFHelper: SFHelper.address,
     },
     log: true,
-    skipIfAlreadyDeployed: reDeploy,
+    skipIfAlreadyDeployed: true,
   });
 
   const dHedgeCoreFactory = await deploy("dHedgeCoreFactory", {
@@ -39,7 +39,7 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
     },
     args: [DAOAddr, feeRate],
     log: true,
-    skipIfAlreadyDeployed: reDeploy,
+    skipIfAlreadyDeployed: true,
   });
 
   try {

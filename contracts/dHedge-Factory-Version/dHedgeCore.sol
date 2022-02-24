@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
+import "./Interfaces/IdHedgeCore.sol";
 import "./Interfaces/IdHedgeCoreFactory.sol";
 
 import "hardhat/console.sol";
@@ -24,12 +25,10 @@ import "hardhat/console.sol";
 // solhint-disable reason-string
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
-contract dHedgeCore is Initializable, SuperAppBase {
+contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     using SafeERC20 for IERC20;
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
-
-    event EmergencyWithdraw(address _token);
 
     // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves
     dHedgeStorage.dHedgePool private poolData;
@@ -58,7 +57,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
 
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
-    function dHedgeDeposit(address _token) external {
+    function dHedgeDeposit(address _token) external override {
         _onlyActive();
         poolData.deposit(_token);
     }
@@ -77,19 +76,23 @@ contract dHedgeCore is Initializable, SuperAppBase {
     }
 
     /// @dev Deactivates a dHedgeCore contract
-    function deactivateCore() external {
+    function deactivateCore(string calldata _message) external {
         _onlyOwner(msg.sender);
         _onlyActive();
 
         poolData.isActive = false;
+
+        emit CoreDeactivated(_message);
     }
 
     /// @dev Reactivates a dHedgeCore contract
-    function reactivateCore() external {
+    function reactivateCore(string calldata _message) external {
         _onlyOwner(msg.sender);
         require(!poolData.isActive, "dHedgeCore: Pool already active");
 
         poolData.isActive = true;
+
+        emit CoreReactivated(_message);
     }
 
     /// @notice Closes a supertoken stream if core is jailed or user is running low on balance
@@ -99,13 +102,16 @@ contract dHedgeCore is Initializable, SuperAppBase {
     /// or user doesn't have enough amount to stream for more than 12 hours
     function emergencyCloseStream(ISuperToken _superToken, address _user)
         external
+        override
     {
         _superToken.emergencyCloseStream(_user);
+
+        emit StreamTerminated(_superToken, _user);
     }
 
     /// @notice Checks if the core is active or not
     /// @return Boolean indicating working status of core
-    function checkCoreActive() external view returns (bool) {
+    function checkCoreActive() external view override returns (bool) {
         return poolData.isActive;
     }
 
@@ -118,7 +124,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
     /// @dev Gets the latest distribution index created
     /// @return Number corresponding to the latest created index
     /// This function can also be used to get number of tokens supported by this dHedgeCore
-    function getLatestDistIndex() external view returns (uint32) {
+    function getLatestDistIndex() external view override returns (uint32) {
         return poolData.latestDistIndex;
     }
 
@@ -129,6 +135,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
     function getTokenDistIndex(address _token)
         external
         view
+        override 
         returns (bool, uint32)
     {
         if (address(poolData.tokenData[_token].superToken) != address(0))
@@ -144,6 +151,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
     function calcUserUninvested(address _user, address _token)
         public
         view
+        override
         returns (uint256)
     {
         return poolData.calcUserUninvested(_user, _token);
@@ -152,28 +160,9 @@ contract dHedgeCore is Initializable, SuperAppBase {
     /// @dev Checks if deposit action can be performed
     /// @return Boolean indicating if upkeep/deposit can be performed
     /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool
-    function requireUpkeep() public view returns (bool, address) {
+    function requireUpkeep() public view override returns (bool, address) {
         return poolData.requireUpkeep();
     }
-
-    // function _transferBuffer(
-    //     ISuperToken _superToken,
-    //     uint256 _lastDepositAt,
-    //     bytes memory _ctx
-    // ) internal {
-    //     address _user = SFHelper.HOST.decodeCtx(_ctx).msgSender;
-
-    //     (, int96 _flowRate) = _superToken.getFlow(_user);
-
-    //     require(
-    //         _superToken.transferFrom(
-    //             _user,
-    //             address(this),
-    //             (block.timestamp - _lastDepositAt) * uint256(uint96(_flowRate))
-    //         ),
-    //         "dHedgeCore: Buffer transfer failed"
-    //     );
-    // }
 
     /// @dev Checks status of the core and reverts if inactive
     function _onlyActive() internal view {
@@ -273,7 +262,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
             tokenData.distIndex = poolData.latestDistIndex++;
 
             // To calculate amount streamed after deployment but before first deposit
-            tokenData.lastDepositAt = block.timestamp; 
+            tokenData.lastDepositAt = block.timestamp;
 
             // console.log(
             //     "Index for token %s: %s",
@@ -302,7 +291,8 @@ contract dHedgeCore is Initializable, SuperAppBase {
             _superToken.transferFrom(
                 _user,
                 address(this),
-                (block.timestamp - tokenData.lastDepositAt) * uint256(uint96(_flowRate))
+                (block.timestamp - tokenData.lastDepositAt) *
+                    uint256(uint96(_flowRate))
             ),
             "dHedgeCore: Buffer transfer failed"
         );
@@ -312,6 +302,8 @@ contract dHedgeCore is Initializable, SuperAppBase {
             tokenData.distIndex,
             _newCtx
         );
+
+        emit StreamCreated(_superToken, _user);
     }
 
     function beforeAgreementUpdated(
@@ -344,7 +336,10 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
+        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
+
         _newCtx = poolData.afterAgreement(
+            _user,
             _agreementClass,
             _superToken.getUnderlyingToken(),
             _newCtx,
@@ -352,16 +347,17 @@ contract dHedgeCore is Initializable, SuperAppBase {
         );
 
         // We are directly using `getUnderlyingToken` method because to update a flow, the flow first must
-        // have been created during which this supertoken was mapped to the underlying token 
+        // have been created during which this supertoken was mapped to the underlying token
         // i.e., this supertoken is acceptable to us
         // _transferBuffer(
         //     _superToken,
         //     poolData.tokenData[_superToken.getUnderlyingToken()].lastDepositAt,
         //     _newCtx
         // );
+
+        emit StreamUpdated(_superToken, _user);
     }
 
-    /// @dev Remove internal checker functions and instead use if-else
     function beforeAgreementTerminated(
         ISuperToken _superToken,
         address _agreementClass,
@@ -396,8 +392,11 @@ contract dHedgeCore is Initializable, SuperAppBase {
         _onlyHost();
         _newCtx = _ctx;
 
+        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
+
         try
             poolData.afterAgreement(
+                _user,
                 _agreementClass,
                 _superToken.getUnderlyingToken(),
                 _newCtx,
@@ -408,5 +407,7 @@ contract dHedgeCore is Initializable, SuperAppBase {
         } catch (bytes memory _error) {
             console.logBytes(_error);
         }
+
+        emit StreamTerminated(_superToken, _user);
     }
 }

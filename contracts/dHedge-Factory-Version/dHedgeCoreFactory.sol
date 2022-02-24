@@ -12,14 +12,13 @@ import "./dHedgeCore.sol";
  * @title dHedge core factory
  * @author rashtrakoff <rashtrakoff@pm.me>
  * @notice Contract to create new cores easily
- * @dev Some variables necessary/common for all cores are stored here. 
+ * @dev Some variables necessary/common for all cores are stored here.
  * These variables are referred in the cores.
  */
 // solhint-disable var-name-mixedcase
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
-    /// @dev The implementation contract for dHedgeCore can never be changed
-    address public immutable implementation;
+    address public implementation;
 
     /// @notice The DAO which receives fees
     address public override dao;
@@ -37,6 +36,17 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
         implementation = address(new dHedgeCore());
         defaultFeeRate = _defaultFeeRate;
         dao = _dao;
+    }
+
+    /// @dev Sets a new implementation of core contract
+    /// @dev Only to be used in case of an issue with existing/default implementation. Must be removed after testing.
+    function setImplementation(
+        address _implementation,
+        string calldata _message
+    ) external onlyOwner {
+        implementation = _implementation;
+
+        emit ImplementationChanged(_implementation, _message);
     }
 
     /// @dev Sets fee rate for all cores

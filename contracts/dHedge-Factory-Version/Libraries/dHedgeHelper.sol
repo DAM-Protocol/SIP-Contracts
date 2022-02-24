@@ -36,6 +36,16 @@ library dHedgeHelper {
         uint256 _amount,
         uint256 _liquidityMinted
     );
+    event UpfrontFeeReturned(
+        ISuperToken _superToken,
+        address _sender,
+        uint256 _amount
+    );
+    event UpfrontFeeDeposited(
+        ISuperToken _superToken,
+        address _sender,
+        uint256 _amount
+    );
 
     /**
      * @dev Function to deposit tokens into a dHedge pool
@@ -138,6 +148,7 @@ library dHedgeHelper {
      */
     function afterAgreement(
         dHedgeStorage.dHedgePool storage _dHedgePool,
+        address _sender,
         address _agreementClass,
         address _underlyingToken,
         bytes memory _ctx,
@@ -151,53 +162,53 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            address _sender = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
+            // address _sender = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
-            (, int96 _flowRate) = tokenData.superToken.getFlow(_sender);
+            ISuperToken _superToken = tokenData.superToken;
+
+            (, int96 _flowRate) = _superToken.getFlow(_sender);
             uint256 _currFlowRate = uint256(uint96(_flowRate));
 
-            assert(
-                _userUninvested <= tokenData.superToken.balanceOf(address(this))
-            );
+            assert(_userUninvested <= _superToken.balanceOf(address(this)));
 
-            // Return some amount if previous flow rate was higher than the current one after update
-            uint256 _depositAmount = (block.timestamp -
-                tokenData.lastDepositAt) * _currFlowRate;
+            {
+                // Return some amount if previous flow rate was higher than the current one after update
+                uint256 _depositAmount = (block.timestamp -
+                    tokenData.lastDepositAt) * _currFlowRate;
 
-            bool success;
-            if (_depositAmount > _userUninvested) {
-                // console.log("Reached here 1");
+                bool success;
+                if (_depositAmount > _userUninvested) {
+                    // console.log("Reached here 1");
+                    uint256 _amount = _depositAmount - _userUninvested;
 
-                success = tokenData.superToken.transferFrom(
-                    _sender,
-                    address(this),
-                    _depositAmount - _userUninvested
-                );
-            } else if (_depositAmount < _userUninvested) {
-                // console.log("Reached here 2");
+                    success = _superToken.transferFrom(
+                        _sender,
+                        address(this),
+                        _amount
+                    );
 
-                success = tokenData.superToken.transfer(
-                    _sender,
-                    _userUninvested - _depositAmount
-                );
+                    emit UpfrontFeeDeposited(_superToken, _sender, _amount);
+                } else if (_depositAmount < _userUninvested) {
+                    // console.log("Reached here 2");
+                    uint256 _amount = _userUninvested - _depositAmount;
+
+                    success = _superToken.transfer(_sender, _amount);
+
+                    emit UpfrontFeeReturned(_superToken, _sender, _amount);
+                }
+
+                require(success, "dHedgeHelper: Buffer transfer failed");
             }
 
-            require(success, "dHedgeHelper: Buffer transfer failed");
-
-            _newCtx = tokenData.superToken.updateSharesInCallback(
+            _newCtx = _superToken.updateSharesInCallback(
                 _dHedgePool.DHPTx,
                 tokenData.distIndex,
                 _newCtx
             );
-
-            // require(
-            //     tokenData.superToken.transfer(_sender, _userUninvested),
-            //     "dHedgeHelper: Uninvested amount transfer failed"
-            // );
         }
     }
 
