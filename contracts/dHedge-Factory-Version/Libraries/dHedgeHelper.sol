@@ -32,19 +32,19 @@ library dHedgeHelper {
     using SFHelper for ISuperToken;
 
     event TokenDeposited(
-        address _token,
-        uint256 _amount,
-        uint256 _liquidityMinted
+        address token,
+        uint256 amount,
+        uint256 liquidityMinted
     );
     event UpfrontFeeReturned(
-        ISuperToken _superToken,
-        address _sender,
-        uint256 _amount
+        ISuperToken superToken,
+        address sender,
+        uint256 amount
     );
     event UpfrontFeeDeposited(
-        ISuperToken _superToken,
-        address _sender,
-        uint256 _amount
+        ISuperToken superToken,
+        address sender,
+        uint256 amount
     );
 
     /**

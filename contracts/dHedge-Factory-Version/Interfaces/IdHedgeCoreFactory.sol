@@ -2,10 +2,10 @@
 pragma solidity ^0.8.4;
 
 interface IdHedgeCoreFactory {
-    event CoreCreated(address _newCore, address _pool, address _poolSuperToken);
-    event ImplementationChanged(address _newImplementation, string _message);
-    event FeeRateChanged(uint32 _newFeeRate);
-    event DAOAddressChanged(address _newDAO);
+    event CoreCreated(address newCore, address pool, address poolSuperToken);
+    event ImplementationChanged(address newImplementation, string message);
+    event FeeRateChanged(uint32 newFeeRate);
+    event DAOAddressChanged(address newDAO);
 
     function dao() external view returns (address);
 

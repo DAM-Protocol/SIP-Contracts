@@ -6,7 +6,9 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
 
   const DAOAddr = prompt("Enter DAO address: ");
   const feeRate = prompt("Enter default fee rate scaled to 1e6: ");
-  const reDeploy = prompt("Do you want to re-deploy (enter true/false)? ");
+  const reDeploy = prompt(
+    "Do you want to skip re-deployment (enter true/false)? "
+  );
 
   console.info("\n--Beginning infrastructure deployment--\n");
 
@@ -28,7 +30,7 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
       SFHelper: SFHelper.address,
     },
     log: true,
-    skipIfAlreadyDeployed: true,
+    skipIfAlreadyDeployed: reDeploy,
   });
 
   const dHedgeCoreFactory = await deploy("dHedgeCoreFactory", {
@@ -39,7 +41,7 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
     },
     args: [DAOAddr, feeRate],
     log: true,
-    skipIfAlreadyDeployed: true,
+    skipIfAlreadyDeployed: reDeploy,
   });
 
   try {

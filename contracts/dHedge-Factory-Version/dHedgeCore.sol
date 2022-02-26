@@ -105,8 +105,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         override
     {
         _superToken.emergencyCloseStream(_user);
-
-        emit StreamTerminated(_superToken, _user);
     }
 
     /// @notice Checks if the core is active or not
@@ -303,7 +301,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx
         );
 
-        emit StreamCreated(_superToken, _user);
+        emit StreamModified(_superToken, _user);
     }
 
     function beforeAgreementUpdated(
@@ -355,7 +353,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         //     _newCtx
         // );
 
-        emit StreamUpdated(_superToken, _user);
+        emit StreamModified(_superToken, _user);
     }
 
     function beforeAgreementTerminated(
@@ -408,6 +406,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             console.logBytes(_error);
         }
 
-        emit StreamTerminated(_superToken, _user);
+        emit StreamModified(_superToken, _user);
     }
 }
