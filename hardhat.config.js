@@ -8,6 +8,7 @@ require("hardhat-contract-sizer");
 require("hardhat-tracer");
 require("hardhat-deploy");
 require("./tasks/dHedge-Factory-Version/CreateSIP");
+require("./tasks/dHedge-Factory-Version/CreateSuperToken");
 require("./tasks/dHedge-Factory-Version/PauseCore");
 require("./tasks/dHedge-Factory-Version/DeactivateCore");
 
@@ -32,7 +33,7 @@ module.exports = {
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 23736635,
+        blockNumber: 25495628,
         enabled: true,
       },
       blockGasLimit: 20000000,
@@ -42,8 +43,8 @@ module.exports = {
     },
     polygon: {
       url: process.env.POLYGON_NODE_URL,
-      blockGasLimit: 20000000,
-      gasPrice: 35000000000,
+      // blockGasLimit: 20000000,
+      // gasPrice: 35000000000,
       accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`],
     },
   },
