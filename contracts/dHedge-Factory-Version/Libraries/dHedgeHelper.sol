@@ -47,6 +47,65 @@ library dHedgeHelper {
         uint256 amount
     );
 
+    function initStreamToken(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        ISuperToken _superToken
+    ) external {
+        address _underlyingToken = _superToken.getUnderlyingToken();
+        dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
+            _underlyingToken
+        ];
+
+        require(
+            address(tokenData.superToken) == address(0),
+            "dHedgeHelper: Token already present"
+        );
+
+        /* 
+            Check if the underlying token is enabled as deposit asset. If not, 
+            revert the transaction as the tokens can't be deposited into the pool.
+            If yes:
+                Map supertoken to the underlying token.
+                Unlimited approve underlying token to the dHedge pool.
+        */
+        if (address(tokenData.superToken) == address(0)) {
+            dHedgeStorage.PermIndexData memory _permDistIndex1;
+            dHedgeStorage.PermIndexData memory _permDistIndex2;
+            uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
+
+            tokenData.superToken = _superToken;
+
+            _permDistIndex1.indexId = _latestDistIndex;
+            _permDistIndex2.indexId = _latestDistIndex + 1;
+            _permDistIndex2.isLocked = true;
+            _dHedgePool.latestDistIndex += 2;
+
+            // To calculate amount streamed after deployment but before first deposit
+            tokenData.lastDepositAt = uint64(block.timestamp);
+
+            // console.log(
+            //     "Index for token %s: %s",
+            //     _underlyingToken,
+            //     tokenData.distIndex
+            // );
+
+            bytes memory _newCtx = _dHedgePool.DHPTx.createIndex(
+                _latestDistIndex
+            );
+
+            _newCtx = _dHedgePool.DHPTx.createIndex(_latestDistIndex + 1);
+
+            IERC20(_underlyingToken).safeIncreaseAllowance(
+                _dHedgePool.poolLogic,
+                type(uint256).max
+            );
+
+            tokenData.permDistIndexData1 = _permDistIndex1;
+            tokenData.permDistIndexData2 = _permDistIndex2;
+
+        }
+    }
+
     /**
      * @dev Function to deposit tokens into a dHedge pool
      * @param _dHedgePool Struct containing details regarding the pool and various tokens in it
@@ -91,7 +150,7 @@ library dHedgeHelper {
             // Perform deposit transaction iff amount of underlying tokens is greater than 0
             if (_depositBalance > 0) {
                 // Store the timestamp of last time a deposit & distribution was made
-                tokenData.lastDepositAt = block.timestamp;
+                tokenData.lastDepositAt = uint64(block.timestamp);
 
                 // Transfer the fees collected to the owner only if it's greater than 0
                 if (_feeCollected > 0) {
@@ -162,7 +221,6 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            // address _sender = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[

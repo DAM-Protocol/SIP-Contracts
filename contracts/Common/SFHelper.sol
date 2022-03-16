@@ -71,12 +71,11 @@ library SFHelper {
      * @param _ctx Superfluid context object
      * This function should only be called from a superapp callback
      */
-    function createIndexInCallback(
+    function createIndex(
         ISuperToken _superToken,
-        uint32 _index,
-        bytes calldata _ctx
+        uint32 _index
     ) external returns (bytes memory _newCtx) {
-        (_newCtx, ) = HOST.callAgreementWithContext(
+        _newCtx = HOST.callAgreement(
             IDA_V1,
             abi.encodeWithSelector(
                 IDA_V1.createIndex.selector,
@@ -84,8 +83,7 @@ library SFHelper {
                 _index,
                 new bytes(0) // placeholder ctx
             ),
-            new bytes(0), // userData
-            _ctx
+            new bytes(0) // userData
         );
 
         emit NewSupertokenAdded(

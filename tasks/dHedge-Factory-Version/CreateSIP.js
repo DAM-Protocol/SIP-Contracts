@@ -22,17 +22,13 @@ task("CreateSIP", "Creates a SIP contract for a dHEDGE pool")
       taskArgs.supertoken
     );
 
-    const newCore = await dHedgeCoreFactory.cores(taskArgs.pool);
-
+    const getNewCore = async () => await dHedgeCoreFactory.cores(taskArgs.pool);
+    let newCore;
+    while (
+      (newCore = await getNewCore()) ===
+      "0x0000000000000000000000000000000000000000"
+    ) {
+      setTimeout(getNewCore, 2000);
+    }
     console.info(`\n--Deployed core contract at ${newCore}--\n`);
-
-    // Somehow the contracts are not able to be verified. Could it be due to CloneFactory ?
-    // try {
-    //   await hre.run("verify:verify", {
-    //     address: newCore,
-    //     contract: "contracts/dHedge-Factory-Version/dHedgeCore.sol:dHedgeCore",
-    //   });
-    // } catch (error) {
-    //   console.log(`${error.message} for dHedgeCore at address ${newCore}`);
-    // }
   });

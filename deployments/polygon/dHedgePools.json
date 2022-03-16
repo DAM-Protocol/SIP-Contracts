@@ -2,5 +2,9 @@
     "0x9e859af5f7de3074039bfadfd0cf566749b94924": {
         "superToken": "0x5343fa0BD545400CcBDE7860B1Ff004d9112C568",
         "core": "0xCcF6A6Cb41315A0Ef3B074913Cd60Ba0A5982936"
+    },
+    "0xe2bbe551f754e87b776e75fe289174da0eb0e299": {
+        "superToken": "0x14FEf777dDdF3C4B0BfD163d7973089c79cfBFE5",
+        "core": "0x22fb1fa0c61db819fec42bdabf0559d80b9e043b"
     }
 }

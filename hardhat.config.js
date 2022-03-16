@@ -33,11 +33,12 @@ module.exports = {
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 25495628,
+        // blockNumber: 23736635,
+        blockNumber: 25519254,
         enabled: true,
       },
-      blockGasLimit: 20000000,
-      gasPrice: 30000000000,
+      // blockGasLimit: 20000000,
+      // gasPrice: 30000000000,
       // accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
       saveDeployments: false,
     },
@@ -52,7 +53,7 @@ module.exports = {
     enabled: true,
     currency: "USD",
     token: "MATIC",
-    gasPrice: 100, // Set to 100 GWei
+    // gasPrice: 100, // Set to 100 GWei
     gasPriceApi:
       "https://api.polygonscan.com/api?module=proxy&action=eth_gasPrice",
     showTimeSpent: true,

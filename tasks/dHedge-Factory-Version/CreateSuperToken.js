@@ -38,17 +38,29 @@ task(
       taskArgs.symbol
     );
 
-    const superTokenFilter =
-      await superTokenFactory.filters.SuperTokenCreated();
-
-    const response = await superTokenFactory.queryFilter(
-      superTokenFilter,
-      -1,
-      "latest"
-    );
-
     console.log(
-      `New supertoken address for token ${taskArgs.name} with symbol ${taskArgs.symbol}: ${response[0].args[0]}`
+      "New super token created, check polygonscan for more info about the address"
     );
-    // return response[0].args[0];
+    
+    // The following doesn't work on mainnet
+    // const getSuperTokenAddr = async () => {
+    //   const superTokenFilter =
+    //     await superTokenFactory.filters.SuperTokenCreated();
+
+    //   return await superTokenFactory.queryFilter(
+    //     superTokenFilter,
+    //     -1,
+    //     "latest"
+    //   );
+    // };
+
+    // let response;
+    // while ((response = await getSuperTokenAddr()) === undefined) {
+    //   console.log("Reached here");
+    //   setTimeout(getSuperTokenAddr, 2000);
+    // }
+    // console.log(response);
+    // console.log(
+    //   `New supertoken address for token ${taskArgs.name} with symbol ${taskArgs.symbol}: ${response[0].args[0]}`
+    // );
   });

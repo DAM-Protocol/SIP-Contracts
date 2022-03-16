@@ -6,23 +6,42 @@ import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/c
 import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 
 /**
- * @title dHedge storage library
+ * @title dHedge storage library.
  * @author rashtrakoff <rashtrakoff@pm.me>
- * @dev Contains a struct which defines a dHedge pool for a core contract
+ * @dev Contains a struct which defines a dHedge pool for a core contract.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable contract-name-camelcase
 // solhint-disable var-name-mixedcase
 library dHedgeStorage {
+
+    /**
+     * @param uninvestedSum Uninvested amount of users assigned to a particular permanent index.
+     * @param netFlowRate Sum of flow rates of users assigned to a particular permanent index.
+     * @param lastUpdatedAt Timestamp when this index was last updated (stream creation/updation/termination).
+     * @param isLocked Boolean depicting if amount corresponding to this index was deposited and therefore, 
+     * this index is under lock or not.
+     */
+    struct PermIndexData {
+        uint256 uninvestedSum;
+        uint96 netFlowRate;
+        uint64 lastUpdatedAt;
+        uint32 indexId;
+        bool isLocked; // Do we need to store this ?
+    }
+
     /**
      * @param superToken Contains supported supertoken of an underlying token.
-     * @param distIndex IDA distribution index with respect to an underlying token.
+     * @param permDistIndex Primary/Permanent IDA distribution index with respect to an underlying token.
+     * @param tempDistIndex Temporary IDA distribution index with respect to an underlying token.
      * @param lastDepositAt Latest timestamp of when an underlying token was deposited to a dHEDGE pool.
      */
     struct TokenData {
         ISuperToken superToken;
-        uint32 distIndex;
-        uint256 lastDepositAt;
+        PermIndexData permDistIndexData1;
+        PermIndexData permDistIndexData2;
+        uint64 lastDepositAt;
+        uint32 tempDistIndexId;
     }
 
     /**

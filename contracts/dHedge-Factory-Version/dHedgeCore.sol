@@ -55,6 +55,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
      * Core functions
      *************************************************************************/
 
+    function initStreamToken(ISuperToken _superToken) external {
+        _onlyActive();
+        poolData.initStreamToken(_superToken);
+    }
+
     /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
     /// @param _token Address of the underlying token to be deposited into dHedge pool
     function dHedgeDeposit(address _token) external override {
@@ -113,12 +118,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.isActive;
     }
 
-    // /// @notice Gets pool address
-    // /// @return Returns address of the dHedge pool this core contract serves
-    // function getPoolLogic() external view returns (address) {
-    //     return poolData.poolLogic;
-    // }
-
     /// @dev Gets the latest distribution index created
     /// @return Number corresponding to the latest created index
     /// This function can also be used to get number of tokens supported by this dHedgeCore
@@ -133,7 +132,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     function getTokenDistIndex(address _token)
         external
         view
-        override 
+        override
         returns (bool, uint32)
     {
         if (address(poolData.tokenData[_token].superToken) != address(0))
@@ -219,8 +218,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             .superToken;
 
         require(
-            address(_superStreamToken) == address(0) ||
-                _superStreamToken == _superToken,
+            _superStreamToken == _superToken,
             "dHedgeCore: Supertoken not supported"
         );
         require(
@@ -247,37 +245,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
             _underlyingToken
         ];
-
-        /* 
-            Check if the underlying token is enabled as deposit asset. If not, 
-            revert the transaction as the tokens can't be deposited into the pool.
-            If yes:
-                Map supertoken to the underlying token.
-                Unlimited approve underlying token to the dHedge pool.
-        */
-        if (address(tokenData.superToken) == address(0)) {
-            tokenData.superToken = _superToken;
-            tokenData.distIndex = poolData.latestDistIndex++;
-
-            // To calculate amount streamed after deployment but before first deposit
-            tokenData.lastDepositAt = block.timestamp;
-
-            // console.log(
-            //     "Index for token %s: %s",
-            //     _underlyingToken,
-            //     tokenData.distIndex
-            // );
-
-            _newCtx = poolData.DHPTx.createIndexInCallback(
-                tokenData.distIndex,
-                _newCtx
-            );
-
-            IERC20(_underlyingToken).safeIncreaseAllowance(
-                poolData.poolLogic,
-                type(uint256).max
-            );
-        }
 
         // An upfront fee must be charged to avoid a user getting shares that might make them eligible to
         // receive profit even though they haven't streamed much.
