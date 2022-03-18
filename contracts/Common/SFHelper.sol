@@ -14,11 +14,8 @@ import "hardhat/console.sol";
  */
 // solhint-disable not-rely-on-time
 library SFHelper {
-    event NewSupertokenAdded(
-        address _superToken,
-        address _underlyingToken,
-        uint32 _index
-    );
+    event NewSupertokenAdded(address _superToken, uint32 _index);
+    event NewTemporaryIndexCreated(address _superToken, uint32 _index);
 
     ISuperfluid public constant HOST =
         ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
@@ -68,13 +65,11 @@ library SFHelper {
      * @dev Function to create a distribution index
      * @param _superToken The supertoken to be distributed
      * @param _index New index value containing share details
-     * @param _ctx Superfluid context object
-     * This function should only be called from a superapp callback
      */
-    function createIndex(
-        ISuperToken _superToken,
-        uint32 _index
-    ) external returns (bytes memory _newCtx) {
+    function createIndex(ISuperToken _superToken, uint32 _index)
+        external
+        returns (bytes memory _newCtx)
+    {
         _newCtx = HOST.callAgreement(
             IDA_V1,
             abi.encodeWithSelector(
@@ -86,11 +81,32 @@ library SFHelper {
             new bytes(0) // userData
         );
 
-        emit NewSupertokenAdded(
-            _superToken.getUnderlyingToken(),
-            address(_superToken),
-            _index
+        emit NewSupertokenAdded(address(_superToken), _index);
+    }
+
+    /**
+     * @dev Function to create a distribution index
+     * @param _superToken The supertoken to be distributed
+     * @param _index New index value containing share details
+     */
+    function createIndexInCallback(
+        ISuperToken _superToken,
+        uint32 _index,
+        bytes calldata _ctx
+    ) external returns (bytes memory _newCtx) {
+        (_newCtx, ) = HOST.callAgreementWithContext(
+            IDA_V1,
+            abi.encodeWithSelector(
+                IDA_V1.createIndex.selector,
+                _superToken,
+                _index,
+                new bytes(0) // placeholder ctx
+            ),
+            new bytes(0), // userData
+            _ctx
         );
+
+        emit NewTemporaryIndexCreated(address(_superToken), _index);
     }
 
     /**
@@ -118,6 +134,52 @@ library SFHelper {
                 _index,
                 _msgSender,
                 uint128(_userFlowRate / 1e9),
+                new bytes(0)
+            ),
+            new bytes(0),
+            _ctx
+        );
+    }
+
+    /// @dev To be used when assigning shares in a temporary index
+    function updateSharesInCallback(
+        ISuperToken _superDistToken,
+        uint32 _index,
+        uint128 _units,
+        bytes calldata _ctx
+    ) external returns (bytes memory _newCtx) {
+        address _msgSender = HOST.decodeCtx(_ctx).msgSender;
+
+        (_newCtx, ) = HOST.callAgreementWithContext(
+            IDA_V1,
+            abi.encodeWithSelector(
+                IDA_V1.updateSubscription.selector,
+                _superDistToken,
+                _index,
+                _msgSender,
+                _units,
+                new bytes(0)
+            ),
+            new bytes(0),
+            _ctx
+        );
+    }
+
+    function deleteSubscriptionInCallback(
+        ISuperToken _superToken,
+        uint32 _index,
+        bytes calldata _ctx
+    ) external returns (bytes memory _newCtx) {
+        address _msgSender = HOST.decodeCtx(_ctx).msgSender;
+
+        (_newCtx, ) = HOST.callAgreementWithContext(
+            IDA_V1,
+            abi.encodeWithSelector(
+                IDA_V1.deleteSubscription.selector,
+                _superToken,
+                address(this),
+                _index,
+                _msgSender,
                 new bytes(0)
             ),
             new bytes(0),
@@ -167,6 +229,37 @@ library SFHelper {
         } else revert("SFHelper: No emergency close");
     }
 
+    function getIndex(ISuperToken _superToken, uint32 _indexId)
+        external
+        view
+        returns (
+            bool _exist,
+            uint128 _indexValue,
+            uint128 _totalUnitsApproved,
+            uint128 _totalUnitsPending
+        )
+    {
+        return IDA_V1.getIndex(_superToken, address(this), _indexId);
+    }
+
+    function getSubscription(
+        ISuperToken _superToken,
+        uint32 _index,
+        address _user
+    )
+        external
+        view
+        returns (
+            bool _exist,
+            bool _approved,
+            uint128 _units,
+            uint256 _pendingDistribution
+        )
+    {
+        return
+            IDA_V1.getSubscription(_superToken, address(this), _index, _user);
+    }
+
     /**
      * @dev Calculates uninvested amount of a user
      * @param _superToken Token being streamed
@@ -179,10 +272,11 @@ library SFHelper {
         address _user,
         uint256 _lastDepositAt
     ) external view returns (uint256) {
-        (/* uint256 _userPrevUpdateTimestamp */, int96 _flowRate) = getFlow(
-            _superToken,
-            _user
-        );
+        (
+            ,
+            /* uint256 _userPrevUpdateTimestamp */
+            int96 _flowRate
+        ) = getFlow(_superToken, _user);
         uint256 _userFlowRate = uint256(uint96(_flowRate));
 
         // return
@@ -214,4 +308,28 @@ library SFHelper {
             address(this)
         );
     }
+
+    // function toUnderlyingAmount(uint256 _amount, uint256 _underlyingDecimals)
+    //     internal
+    //     pure
+    //     returns (uint256 _underlyingAmount, uint256 _adjustedAmount)
+    // {
+    //     uint256 factor;
+    //     if (_underlyingDecimals < 18) {
+    //         // If underlying has less decimals
+    //         // one can upgrade less "granular" amount of tokens
+    //         factor = 10**(18 - _underlyingDecimals);
+    //         _underlyingAmount = _amount / factor;
+    //         // remove precision errors
+    //         _adjustedAmount = _underlyingAmount * factor;
+    //     } else if (_underlyingDecimals > 18) {
+    //         // If underlying has more decimals
+    //         // one can upgrade more "granular" amount of tokens
+    //         factor = 10**(_underlyingDecimals - 18);
+    //         _underlyingAmount = _amount * factor;
+    //         _adjustedAmount = _amount;
+    //     } else {
+    //         _underlyingAmount = _adjustedAmount = _amount;
+    //     }
+    // }
 }

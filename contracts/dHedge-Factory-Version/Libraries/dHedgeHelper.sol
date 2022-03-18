@@ -14,7 +14,7 @@ import "hardhat/console.sol";
  * @title Modified IERC20 interface
  * @dev This interface is used to access decimals of an ERC20 token
  */
-interface IERC20Mod {
+interface IERC20Mod is IERC20 {
     function decimals() external view returns (uint8);
 }
 
@@ -61,24 +61,17 @@ library dHedgeHelper {
             "dHedgeHelper: Token already present"
         );
 
-        /* 
-            Check if the underlying token is enabled as deposit asset. If not, 
-            revert the transaction as the tokens can't be deposited into the pool.
-            If yes:
-                Map supertoken to the underlying token.
-                Unlimited approve underlying token to the dHedge pool.
-        */
+        // Create 2 permanent indexes in accordance with `3-index` approach
         if (address(tokenData.superToken) == address(0)) {
-            dHedgeStorage.PermIndexData memory _permDistIndex1;
-            dHedgeStorage.PermIndexData memory _permDistIndex2;
             uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
+            tokenData.permDistIndex1 = _latestDistIndex;
+            tokenData.permDistIndex2 = _latestDistIndex + 1;
+
+            // We will start the stream of the supertoken using index 1 and hence, index 2 is locked.
+            tokenData.lockedIndexId = _latestDistIndex + 1;
+            _dHedgePool.latestDistIndex += 2;
 
             tokenData.superToken = _superToken;
-
-            _permDistIndex1.indexId = _latestDistIndex;
-            _permDistIndex2.indexId = _latestDistIndex + 1;
-            _permDistIndex2.isLocked = true;
-            _dHedgePool.latestDistIndex += 2;
 
             // To calculate amount streamed after deployment but before first deposit
             tokenData.lastDepositAt = uint64(block.timestamp);
@@ -95,14 +88,11 @@ library dHedgeHelper {
 
             _newCtx = _dHedgePool.DHPTx.createIndex(_latestDistIndex + 1);
 
+            // Unlimited allowance for the dHEDGE pool so that deposits can take place efficiently
             IERC20(_underlyingToken).safeIncreaseAllowance(
                 _dHedgePool.poolLogic,
                 type(uint256).max
             );
-
-            tokenData.permDistIndexData1 = _permDistIndex1;
-            tokenData.permDistIndexData2 = _permDistIndex2;
-
         }
     }
 
@@ -117,8 +107,8 @@ library dHedgeHelper {
     ) external {
         require(
             (block.timestamp -
-                _dHedgePool.tokenData[_depositToken].lastDepositAt) >= 24 hours,
-            "dHedgeHelper: Time difference exceeds limit"
+                _dHedgePool.tokenData[_depositToken].lastDepositAt) > 24 hours,
+            "dHedgeHelper: Less than 24 hours"
         );
 
         IPoolLogic _poolLogic = IPoolLogic(_dHedgePool.poolLogic);
@@ -132,27 +122,71 @@ library dHedgeHelper {
                 _depositToken
             ];
 
-            // Downgrade all supertokens to their underlying tokens
-            tokenData.superToken.downgrade(
-                tokenData.superToken.balanceOf(address(this))
-            );
+            ISuperToken _DHPTx = _dHedgePool.DHPTx;
+            {
+                (
+                    ,
+                    ,
+                    uint128 _totalLockedIndexApprovedUnits1,
+                    uint128 _totalLockedIndexPendingUnits1
+                ) = _DHPTx.getIndex(tokenData.permDistIndex1);
 
-            uint256 _depositBalance = IERC20(_depositToken).balanceOf(
+                (
+                    ,
+                    ,
+                    uint128 _totalLockedIndexApprovedUnits2,
+                    uint128 _totalLockedIndexPendingUnits2
+                ) = _DHPTx.getIndex(tokenData.permDistIndex2);
+
+                uint128 _totalLockedIndexUnits1 = _totalLockedIndexApprovedUnits1 +
+                        _totalLockedIndexPendingUnits1;
+
+                uint128 _totalLockedIndexUnits2 = _totalLockedIndexApprovedUnits2 +
+                        _totalLockedIndexPendingUnits2;
+
+                uint256 _superTokenDepositBalance = ((
+                    (tokenData.lockedIndexId == tokenData.permDistIndex2)
+                        ? _totalLockedIndexUnits1
+                        : _totalLockedIndexUnits2
+                ) * tokenData.superToken.balanceOf(address(this))) /
+                    _totalLockedIndexUnits2 +
+                    _totalLockedIndexUnits1;
+
+                // uint256 _superTokenDepositBalance = ((
+                //     (tokenData.lockedIndexId == tokenData.permDistIndex2)
+                //         ? _totalLockedIndexApprovedUnits1 +
+                //             _totalLockedIndexPendingUnits1
+                //         : _totalLockedIndexApprovedUnits2 +
+                //             _totalLockedIndexPendingUnits2
+                // ) * tokenData.superToken.balanceOf(address(this))) /
+                //     (_totalLockedIndexApprovedUnits2 +
+                //         _totalLockedIndexPendingUnits2 +
+                //         _totalLockedIndexApprovedUnits1 +
+                //         _totalLockedIndexPendingUnits1);
+
+                // Downgrade amount of supertoken required for deposit.
+                tokenData.superToken.downgrade(_superTokenDepositBalance);
+            }
+
+            uint256 _depositBalance = IERC20Mod(_depositToken).balanceOf(
                 address(this)
             );
 
-            // Calculate fee to be collected
+            // Calculate fee to be collected.
             uint256 _feeCollected = (_depositBalance *
                 IdHedgeCoreFactory(_dHedgePool.factory).defaultFeeRate()) / 1e6;
 
             _depositBalance -= _feeCollected;
+
+            // TODO: Distribute the locked DHPT and then deposit into dHEDGE pool.
 
             // Perform deposit transaction iff amount of underlying tokens is greater than 0
             if (_depositBalance > 0) {
                 // Store the timestamp of last time a deposit & distribution was made
                 tokenData.lastDepositAt = uint64(block.timestamp);
 
-                // Transfer the fees collected to the owner only if it's greater than 0
+                // Transfer the fees collected to the owner only if it's greater than 0.
+                // This can happen if `defaultFeeRate` is set as 0.
                 if (_feeCollected > 0) {
                     IERC20(_depositToken).safeTransfer(
                         IdHedgeCoreFactory(_dHedgePool.factory).dao(),
@@ -164,15 +198,6 @@ library dHedgeHelper {
                 uint256 _liquidityMinted = _poolLogic.deposit(
                     _depositToken,
                     _depositBalance
-                );
-
-                // Upgrade recently minted DHPT to DHPTx
-                _dHedgePool.DHPTx.upgrade(_liquidityMinted);
-
-                // Distribute the DHPTx to streamers
-                _dHedgePool.DHPTx.distribute(
-                    tokenData.distIndex,
-                    _dHedgePool.DHPTx.balanceOf(address(this))
                 );
 
                 // Following console logs are required for manual verification of some tests
@@ -223,17 +248,19 @@ library dHedgeHelper {
         ) {
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
+            // Should this be a storage pointer ?
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
             ISuperToken _superToken = tokenData.superToken;
-
-            (, int96 _flowRate) = _superToken.getFlow(_sender);
-            uint256 _currFlowRate = uint256(uint96(_flowRate));
-
-            assert(_userUninvested <= _superToken.balanceOf(address(this)));
+            ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
             {
+                (, int96 _flowRate) = _superToken.getFlow(_sender);
+                uint256 _currFlowRate = uint256(uint96(_flowRate));
+
+                assert(_userUninvested <= _superToken.balanceOf(address(this)));
+
                 // Return some amount if previous flow rate was higher than the current one after update
                 uint256 _depositAmount = (block.timestamp -
                     tokenData.lastDepositAt) * _currFlowRate;
@@ -262,11 +289,67 @@ library dHedgeHelper {
                 require(success, "dHedgeHelper: Buffer transfer failed");
             }
 
-            _newCtx = _superToken.updateSharesInCallback(
-                _dHedgePool.DHPTx,
-                tokenData.distIndex,
-                _newCtx
-            );
+            {
+                uint32 _lockedIndexId = tokenData.lockedIndexId;
+
+                // First permanent index id is always an even number as we start from 0.
+                // Second permanent index id is always an odd number for the same reason.
+                uint32 _currActiveIndex = (_lockedIndexId ==
+                    tokenData.permDistIndex1)
+                    ? tokenData.permDistIndex2
+                    : tokenData.permDistIndex1;
+
+                uint32 _assignedIndex = tokenData.assignedIndex[_sender];
+
+                // If current active index and assigned index are not same and assigned index is not 0
+                // then we will have to initiate index migration.
+                if (
+                    (_assignedIndex != _currActiveIndex) && _assignedIndex != 0
+                ) {
+                    // Index migration is done by deleting a sender's subscription in the locked index
+                    // and assigning new units in the active index along with assigning new units in temporary
+                    // index.
+
+                    (, , uint128 _userUnits, ) = _DHPTx.getSubscription(
+                        _lockedIndexId,
+                        _sender
+                    );
+
+                    (
+                        ,
+                        ,
+                        uint128 _totalLockedIndexApprovedUnits,
+                        uint128 _totalLockedIndexPendingUnits
+                    ) = _DHPTx.getIndex(_lockedIndexId);
+
+                    // Calculating a user's pending locked tokens amount by using units issued to the user,
+                    // total units issued and total amount of DHPT in this contract (this is the locked amount)
+                    tokenData.tempDistAmount +=
+                        (_userUnits * _DHPTx.balanceOf(address(this))) /
+                        (_totalLockedIndexApprovedUnits +
+                            _totalLockedIndexPendingUnits);
+
+                    // Deleting units of the user in locked index
+                    _newCtx = _DHPTx.deleteSubscriptionInCallback(
+                        _lockedIndexId,
+                        _newCtx
+                    );
+
+                    // Assigning units in temporary index
+                    _newCtx = _DHPTx.updateSharesInCallback(
+                        tokenData.tempDistIndex,
+                        _userUnits,
+                        _newCtx
+                    );
+                }
+
+                // Assigning new units in the active index
+                _newCtx = _superToken.updateSharesInCallback(
+                    _DHPTx,
+                    _currActiveIndex,
+                    _newCtx
+                );
+            }
         }
     }
 

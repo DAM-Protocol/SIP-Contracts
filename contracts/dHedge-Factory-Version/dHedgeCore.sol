@@ -57,6 +57,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
     function initStreamToken(ISuperToken _superToken) external {
         _onlyActive();
+        require(
+            poolData.isDepositAsset(_superToken.getUnderlyingToken()),
+            "dHedgeCore: Not deposit asset"
+        );
+
         poolData.initStreamToken(_superToken);
     }
 
@@ -200,7 +205,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     /**************************************************************************
      * SuperApp callbacks
      *************************************************************************/
-
+    /// @dev Maybe use `_beforeAgreement` hook here ?
     function beforeAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
@@ -221,14 +226,12 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _superStreamToken == _superToken,
             "dHedgeCore: Supertoken not supported"
         );
-        require(
-            poolData.isDepositAsset(_underlyingToken),
-            "dHedgeCore: Not deposit asset"
-        );
+        
 
-        _cbdata = new bytes(0);
+        _cbdata = abi.encode()
     }
 
+    /// @dev Maybe use `_afterAgreement` hook here ?
     function afterAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
