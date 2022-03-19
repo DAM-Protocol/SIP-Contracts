@@ -186,7 +186,7 @@ library SFHelper {
             _ctx
         );
     }
-
+    
     /**
      * @dev Function to close a stream
      * @dev This function should be called provided the app is jailed or user is running low on supertokens
