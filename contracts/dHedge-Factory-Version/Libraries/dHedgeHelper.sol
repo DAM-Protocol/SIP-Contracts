@@ -25,9 +25,6 @@ interface IERC20Mod is IERC20 {
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 
-// TODO: Lock proper permanent index and check if temporary index creation is required or not.
-// Also figure out what to do in case deposit asset is not accepted.
-
 // solhint-disable reason-string
 // solhint-disable not-rely-on-time
 // solhint-disable contract-name-camelcase
@@ -151,15 +148,33 @@ library dHedgeHelper {
         uint32 _permDistIndex2 = tokenData.permDistIndex2;
         uint32 _tempDistIndex = tokenData.tempDistIndex;
 
-        _distribute(
-            tokenData,
-            _DHPTx,
-            _permDistIndex1,
-            _permDistIndex2,
-            _tempDistIndex
-        );
+        // Distribute DHPT locked in the previous permanent index and create a
+        // new temporary index if `_distribute` function returns true.
+        // If no indices were locked then no distribution is necessary.
+        if (
+            _lockedIndexId != 0 &&
+            _distribute(
+                tokenData,
+                _DHPTx,
+                (_lockedIndexId == _permDistIndex1)
+                    ? _permDistIndex1
+                    : _permDistIndex2,
+                _tempDistIndex
+            )
+        ) {
+            uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
 
-        // If the asset is currently accepted as deposit asset then perform deposit transaction
+            // Create new temporary index.
+            _DHPTx.createIndex(_latestDistIndex);
+
+            // Store the index Id of the temporary index.
+            tokenData.tempDistIndex = _latestDistIndex;
+
+            // Increment the total index id value of the core contract.
+            ++_dHedgePool.latestDistIndex;
+        }
+
+        // If the asset is currently accepted as deposit asset then perform deposit transaction.
         if (_supportLogic.isDepositAsset(_depositToken)) {
             // Downgrade amount of supertoken required for deposit.
             _superToken.downgrade(
@@ -172,6 +187,7 @@ library dHedgeHelper {
                 )
             );
 
+            // Actual deposit logic.
             _deposit(
                 tokenData,
                 _depositToken,
@@ -179,18 +195,13 @@ library dHedgeHelper {
                 _poolLogic
             );
 
-            // Following console logs are required for manual verification of some tests
-            // console.log(
-            //     "Liquidity minted for token %s: %s",
-            //     _depositToken,
-            //     _liquidityMinted
-            // );
-
-            // console.log(
-            //     "Fee collected for token %s: %s",
-            //     _depositToken,
-            //     _feeCollected
-            // );
+            // Lock the index which wasn't locked last time
+            (_lockedIndexId == _permDistIndex1)
+                ? tokenData.lockedIndexId = _permDistIndex2
+                : tokenData.lockedIndexId = _permDistIndex1;
+        } else {
+            // Unlock all indices to avoid unnecessary index migrations.
+            tokenData.lockedIndexId = 0;
         }
     }
 
@@ -202,11 +213,17 @@ library dHedgeHelper {
             _depositToken
         ];
 
+        require(
+            tokenData.lockedIndexId != 0,
+            "dHedgeHelper: No amount to distribute"
+        );
+
         _distribute(
             tokenData,
             _dHedgePool.DHPTx,
-            tokenData.permDistIndex1,
-            tokenData.permDistIndex2,
+            (tokenData.lockedIndexId == tokenData.permDistIndex1)
+                ? tokenData.permDistIndex1
+                : tokenData.permDistIndex2,
             tokenData.tempDistIndex
         );
     }
@@ -235,50 +252,26 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            uint256 _userUninvested = abi.decode(_cbdata, (uint256));
+            (uint256 _userUninvested, bool _migrationRequired) = abi.decode(
+                _cbdata,
+                (uint256, bool)
+            );
 
-            // Should this be a storage pointer ?
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
             ISuperToken _superToken = tokenData.superToken;
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
-            {
-                (, int96 _flowRate) = _superToken.getFlow(_sender);
-                // uint256 _currFlowRate = uint256(uint96(_flowRate));
+            _transferBuffer(
+                _superToken,
+                _sender,
+                tokenData.lastDepositAt,
+                _userUninvested
+            );
 
-                assert(_userUninvested <= _superToken.balanceOf(address(this)));
-
-                // Return some amount if previous flow rate was higher than the current one after update
-                uint256 _depositAmount = (block.timestamp -
-                    tokenData.lastDepositAt) * uint256(uint96(_flowRate));
-
-                bool success;
-                if (_depositAmount > _userUninvested) {
-                    // console.log("Reached here 1");
-                    uint256 _amount = _depositAmount - _userUninvested;
-
-                    success = _superToken.transferFrom(
-                        _sender,
-                        address(this),
-                        _amount
-                    );
-
-                    emit UpfrontFeeDeposited(_superToken, _sender, _amount);
-                } else if (_depositAmount < _userUninvested) {
-                    // console.log("Reached here 2");
-                    uint256 _amount = _userUninvested - _depositAmount;
-
-                    success = _superToken.transfer(_sender, _amount);
-
-                    emit UpfrontFeeReturned(_superToken, _sender, _amount);
-                }
-
-                require(success, "dHedgeHelper: Buffer transfer failed");
-            }
-
-            _newCtx = _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
+            if (_migrationRequired)
+                _newCtx = _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
         }
     }
 
@@ -306,7 +299,8 @@ library dHedgeHelper {
             address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
 
             _cbdata = abi.encode(
-                calcUserUninvested(_dHedgePool, _sender, _underlyingToken)
+                calcUserUninvested(_dHedgePool, _sender, _underlyingToken),
+                true
             );
         }
     }
@@ -396,6 +390,41 @@ library dHedgeHelper {
         return _supportLogic.isDepositAsset(_token);
     }
 
+    function _transferBuffer(
+        ISuperToken _superToken,
+        address _sender,
+        uint64 _lastDepositAt,
+        uint256 _userUninvested
+    ) private {
+        (, int96 _flowRate) = _superToken.getFlow(_sender);
+        // uint256 _currFlowRate = uint256(uint96(_flowRate));
+
+        assert(_userUninvested <= _superToken.balanceOf(address(this)));
+
+        // Return some amount if previous flow rate was higher than the current one after update
+        uint256 _depositAmount = (block.timestamp - _lastDepositAt) *
+            uint256(uint96(_flowRate));
+
+        bool success;
+        if (_depositAmount > _userUninvested) {
+            // console.log("Reached here 1");
+            uint256 _amount = _depositAmount - _userUninvested;
+
+            success = _superToken.transferFrom(_sender, address(this), _amount);
+
+            emit UpfrontFeeDeposited(_superToken, _sender, _amount);
+        } else if (_depositAmount < _userUninvested) {
+            // console.log("Reached here 2");
+            uint256 _amount = _userUninvested - _depositAmount;
+
+            success = _superToken.transfer(_sender, _amount);
+
+            emit UpfrontFeeReturned(_superToken, _sender, _amount);
+        }
+
+        require(success, "dHedgeHelper: Buffer transfer failed");
+    }
+
     function _deposit(
         dHedgeStorage.TokenData storage _tokenData,
         address _depositToken,
@@ -432,6 +461,7 @@ library dHedgeHelper {
                 _depositBalance
             );
 
+            // Note the amount to be distributed.
             _tokenData.permDistAmount = _liquidityMinted;
 
             emit TokenDeposited(
@@ -510,11 +540,9 @@ library dHedgeHelper {
     function _distribute(
         dHedgeStorage.TokenData storage _tokenData,
         ISuperToken _DHPTx,
-        uint32 _permDistIndex1,
-        uint32 _permDistIndex2,
+        uint32 _permDistIndex,
         uint32 _tempDistIndex
-    ) private {
-        uint32 _lockedIndexId = _tokenData.lockedIndexId;
+    ) private returns (bool) {
         uint256 _permDistAmount = _tokenData.permDistAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
 
@@ -522,19 +550,20 @@ library dHedgeHelper {
         _tokenData.tempDistAmount = 0;
 
         if (_permDistAmount > 0) {
-            (_lockedIndexId == _permDistIndex1)
-                ? _DHPTx.distribute(
-                    _permDistIndex1,
-                    _permDistAmount - _tempDistAmount
-                )
-                : _DHPTx.distribute(
-                    _permDistIndex2,
-                    _permDistAmount - _tempDistAmount
-                );
+            _DHPTx.distribute(
+                _permDistIndex,
+                _permDistAmount - _tempDistAmount
+            );
 
-            if (_tempDistAmount > 0)
+            // If there were some units in temporary index then create a new temporary index
+            if (_tempDistAmount > 0) {
                 _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+
+                return true;
+            }
         }
+
+        return false;
     }
 
     function _getSuperTokenDepositBalance(
@@ -567,9 +596,9 @@ library dHedgeHelper {
 
         return
             ((
-                (_lockedIndexId == _permDistIndex2)
-                    ? _totalIndexUnits1
-                    : _totalIndexUnits2
+                (_lockedIndexId == _permDistIndex1)
+                    ? _totalIndexUnits2
+                    : _totalIndexUnits1
             ) * _superTokenBalance) /
             _totalIndexUnits2 +
             _totalIndexUnits1;

@@ -72,6 +72,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         poolData.deposit(_token);
     }
 
+    function distribute(address _token) external {
+        _onlyActive();
+        poolData.distribute(_token);
+    }
+
     /// @dev Function to withdraw a token in case of emergency
     /// @param _token Address of the pool token
     /// @custom:note Remove/Modify this function after testing
@@ -130,20 +135,30 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.latestDistIndex;
     }
 
-    /// @dev Gets the distribution index corresponding to an underlying token
-    /// @param _token Address of a deposit token
-    /// @return Boolean depicting if a distribution index exists for `_token`
-    /// @return Number representing the index value corresponding to `_token` if it exists
-    function getTokenDistIndex(address _token)
+    /// @dev Gets the distribution indices corresponding to an underlying token.
+    /// @param _token Address of a deposit token.
+    /// @return Index ID of first permanent index.
+    /// @return Index ID of second permanent index.
+    /// @return Index ID of temporary index.
+    function getTokenDistIndices(address _token)
         external
         view
         override
-        returns (bool, uint32)
+        returns (
+            uint32,
+            uint32,
+            uint32
+        )
     {
-        if (address(poolData.tokenData[_token].superToken) != address(0))
-            return (true, poolData.tokenData[_token].distIndex);
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[_token];
+        if (address(tokenData.superToken) != address(0))
+            return (
+                tokenData.permDistIndex1,
+                tokenData.permDistIndex2,
+                tokenData.tempDistIndex
+            );
 
-        return (false, 0);
+        return (0, 0, 0);
     }
 
     /// @notice Calculates uninvested token amount of a particular user
@@ -226,9 +241,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _superStreamToken == _superToken,
             "dHedgeCore: Supertoken not supported"
         );
-        
 
-        _cbdata = abi.encode()
+        _cbdata = abi.encode(0, false);
     }
 
     /// @dev Maybe use `_afterAgreement` hook here ?
@@ -237,38 +251,21 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         address _agreementClass,
         bytes32, // _agreementId,
         bytes calldata, // _agreementData,
-        bytes calldata, // _cbdata,
+        bytes calldata _cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
         _onlyHost();
         _onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
-        address _underlyingToken = _superToken.getUnderlyingToken();
-        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
-            _underlyingToken
-        ];
-
-        // An upfront fee must be charged to avoid a user getting shares that might make them eligible to
-        // receive profit even though they haven't streamed much.
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
 
-        (, int96 _flowRate) = _superToken.getFlow(_user);
-
-        require(
-            _superToken.transferFrom(
-                _user,
-                address(this),
-                (block.timestamp - tokenData.lastDepositAt) *
-                    uint256(uint96(_flowRate))
-            ),
-            "dHedgeCore: Buffer transfer failed"
-        );
-
-        _newCtx = _superToken.updateSharesInCallback(
-            poolData.DHPTx,
-            tokenData.distIndex,
-            _newCtx
+        _newCtx = poolData.afterAgreement(
+            _user,
+            _agreementClass,
+            _superToken.getUnderlyingToken(),
+            _newCtx,
+            _cbdata
         );
 
         emit StreamModified(_superToken, _user);
@@ -313,15 +310,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx,
             _cbdata
         );
-
-        // We are directly using `getUnderlyingToken` method because to update a flow, the flow first must
-        // have been created during which this supertoken was mapped to the underlying token
-        // i.e., this supertoken is acceptable to us
-        // _transferBuffer(
-        //     _superToken,
-        //     poolData.tokenData[_superToken.getUnderlyingToken()].lastDepositAt,
-        //     _newCtx
-        // );
 
         emit StreamModified(_superToken, _user);
     }

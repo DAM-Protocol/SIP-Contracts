@@ -13,10 +13,10 @@ interface IdHedgeCore {
     function emergencyCloseStream(ISuperToken _superToken, address _user) external;
     function checkCoreActive() external view returns(bool);
     function getLatestDistIndex() external view returns (uint32);
-    function getTokenDistIndex(address _token)
+    function getTokenDistIndices(address _token)
         external
         view
-        returns (bool, uint32);
+        returns (uint32, uint32, uint32);
     function calcUserUninvested(address _user, address _token)
         external
         view
