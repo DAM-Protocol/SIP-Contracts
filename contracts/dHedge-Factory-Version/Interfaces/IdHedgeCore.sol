@@ -16,7 +16,7 @@ interface IdHedgeCore {
     function getTokenDistIndices(address _token)
         external
         view
-        returns (uint32, uint32, uint32);
+        returns (uint32, uint32, uint32, uint32);
     function calcUserUninvested(address _user, address _token)
         external
         view

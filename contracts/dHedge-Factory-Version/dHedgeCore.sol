@@ -57,11 +57,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
     function initStreamToken(ISuperToken _superToken) external {
         _onlyActive();
-        require(
-            poolData.isDepositAsset(_superToken.getUnderlyingToken()),
-            "dHedgeCore: Not deposit asset"
-        );
-
         poolData.initStreamToken(_superToken);
     }
 
@@ -147,6 +142,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         returns (
             uint32,
             uint32,
+            uint32,
             uint32
         )
     {
@@ -155,10 +151,19 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             return (
                 tokenData.permDistIndex1,
                 tokenData.permDistIndex2,
-                tokenData.tempDistIndex
+                tokenData.tempDistIndex,
+                tokenData.lockedIndexId
             );
 
-        return (0, 0, 0);
+        return (0, 0, 0, 0);
+    }
+
+    function getUserDistIndex(address _user, address _token)
+        external
+        view
+        returns (uint32)
+    {
+        return poolData.tokenData[_token].assignedIndex[_user];
     }
 
     /// @notice Calculates uninvested token amount of a particular user
@@ -242,6 +247,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             "dHedgeCore: Supertoken not supported"
         );
 
+        console.log("Reached before agreement");
+
         _cbdata = abi.encode(0, false);
     }
 
@@ -267,6 +274,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx,
             _cbdata
         );
+
+        console.log("Reached after agreement");
 
         emit StreamModified(_superToken, _user);
     }
@@ -310,6 +319,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx,
             _cbdata
         );
+
+        console.log("Reached here");
 
         emit StreamModified(_superToken, _user);
     }

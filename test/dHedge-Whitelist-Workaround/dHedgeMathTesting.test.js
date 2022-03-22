@@ -142,9 +142,13 @@ describe("dHedgeCore Math Testing", function () {
 
     app = await ethers.getContractAt("dHedgeCore", newCore);
 
-    await PoolFactoryContract.connect(dHEDGEOwner).addTransferWhitelist(
-      newCore
-    );
+    // No whitelisting required
+    // await PoolFactoryContract.connect(dHEDGEOwner).addTransferWhitelist(
+    //   newCore
+    // );
+
+    await app.initStreamToken(USDC.superToken);
+    await app.initStreamToken(DAI.superToken);
 
     await approveAndUpgrade();
   }
@@ -238,12 +242,13 @@ describe("dHedgeCore Math Testing", function () {
       flowRate: userFlowRate,
     });
 
-    tokenDistObj = await app.getTokenDistIndex(tokenObj.token);
+    tokenDistObj = await app.getTokenDistIndices(tokenObj.token);
 
     tokenDistIndex =
-      tokenDistObj[0] === false
-        ? await app.getLatestDistIndex()
-        : tokenDistObj[1];
+      tokenDistObj[3] === tokenDistObj[0] ? tokenDistObj[1] : tokenDistObj[0];
+
+    console.log("Token Dist Obj: ", tokenDistObj);
+    console.log("Token dist index: ", tokenDistIndex);
 
     approveOp = sf.idaV1.approveSubscription({
       indexId: tokenDistIndex,
@@ -293,14 +298,12 @@ describe("dHedgeCore Math Testing", function () {
    * @dev Ideally we would have liked to test for app jail scenario but by design, it shouldn't fail.
    * Maybe we can create a mock contract which can be jailed and then test if this function works ?
    */
-  it("Should be able to close a stream if user is low on supertokens", async () => {
+  it.skip("Should be able to close a stream if user is low on supertokens", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
-
-    // await increaseTime(getSeconds(29) + 3600 * 13);
 
     // Increase time by 29 and a half days.
     await increaseTime(getSeconds(29.5));
@@ -308,19 +311,19 @@ describe("dHedgeCore Math Testing", function () {
     // This line shouldn't throw any error as it is expected to close the stream of the USDCWhale
     await app.emergencyCloseStream(USDC.superToken, USDCWhale.address);
 
+    // DAIWhale has a balance of 9000 DAIx before start of the stream and after a day of streaming
+    // the balance should still be sufficient to last the stream for more than 12 hours
     await startAndSub(DAIWhale, DAI, userFlowRate);
 
     // Increase time by a day
     await increaseTime(getSeconds(1));
 
-    // DAIWhale has a balance of 9000 DAIx before start of the stream and after a day of streaming
-    // the balance should still be sufficient to last the stream for more than 12 hours
     await expect(
       app.emergencyCloseStream(DAI.superToken, DAIWhale.address)
     ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
-  it("Should take/give correct amount of upfront fee (single depositor)", async () => {
+  it.skip("Should take/give correct amount of upfront fee (single depositor)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
@@ -560,7 +563,7 @@ describe("dHedgeCore Math Testing", function () {
    * @dev In this test we are also triggering dHedge deposit and then checking whether the function works
    * as expected.
    */
-  it("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
+  it.only("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));

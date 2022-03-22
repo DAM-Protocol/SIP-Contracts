@@ -58,6 +58,13 @@ library dHedgeHelper {
         ];
 
         require(
+            IPoolManagerLogic(
+                IPoolLogic(_dHedgePool.poolLogic).poolManagerLogic()
+            ).isDepositAsset(_underlyingToken),
+            "dHedgeHelper: Not deposit asset"
+        );
+
+        require(
             address(tokenData.superToken) == address(0),
             "dHedgeHelper: Token already present"
         );
@@ -75,7 +82,7 @@ library dHedgeHelper {
             tokenData.superToken = _superToken;
 
             // To calculate amount streamed after deployment but before first deposit
-            tokenData.lastDepositAt = uint64(block.timestamp);
+            // tokenData.lastDepositAt = uint64(block.timestamp);
 
             // console.log(
             //     "Index for token %s: %s",
@@ -263,6 +270,14 @@ library dHedgeHelper {
             ISuperToken _superToken = tokenData.superToken;
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
+            // If this the first stream corresponding to a new supertoken
+            // then change the `lastDepositAt` to reflect the beginning of the
+            // new supertoken market.
+            if (tokenData.lastDepositAt == 0)
+                tokenData.lastDepositAt = uint64(block.timestamp);
+
+            console.log("Reached before buffer transfer");
+
             _transferBuffer(
                 _superToken,
                 _sender,
@@ -270,8 +285,22 @@ library dHedgeHelper {
                 _userUninvested
             );
 
+            console.log("Reached after buffer transfer");
+
             if (_migrationRequired)
                 _newCtx = _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
+            else {
+                // Assigning new units in the active index
+                _newCtx = _superToken.updateSharesInCallback(
+                    _DHPTx,
+                    (tokenData.lockedIndexId == tokenData.permDistIndex1)
+                        ? tokenData.permDistIndex2
+                        : tokenData.permDistIndex1,
+                    _newCtx
+                );
+
+                console.log("Reached here 3");
+            }
         }
     }
 
@@ -405,24 +434,38 @@ library dHedgeHelper {
         uint256 _depositAmount = (block.timestamp - _lastDepositAt) *
             uint256(uint96(_flowRate));
 
-        bool success;
+        bool _success;
         if (_depositAmount > _userUninvested) {
-            // console.log("Reached here 1");
+            console.log("Reached here 433");
             uint256 _amount = _depositAmount - _userUninvested;
 
-            success = _superToken.transferFrom(_sender, address(this), _amount);
+            console.log("Amount to be transferred: ", _amount);
+
+            _success = _superToken.transferFrom(
+                _sender,
+                address(this),
+                _amount
+            );
+
+            console.log("Buffer transfer successful: ", _success);
 
             emit UpfrontFeeDeposited(_superToken, _sender, _amount);
         } else if (_depositAmount < _userUninvested) {
-            // console.log("Reached here 2");
+            console.log("Reached here 440");
             uint256 _amount = _userUninvested - _depositAmount;
 
-            success = _superToken.transfer(_sender, _amount);
+            _success = _superToken.transfer(_sender, _amount);
+
+            console.log("Buffer transfer successful: ", _success);
 
             emit UpfrontFeeReturned(_superToken, _sender, _amount);
+        } else {
+            // If `_depositAmount == _userUninvested` then technically no transfer should take place.
+            // This case can be reached for the very first streamer of a new supertoken.
+            _success = true;
         }
 
-        require(success, "dHedgeHelper: Buffer transfer failed");
+        require(_success, "dHedgeHelper: Buffer transfer failed");
     }
 
     function _deposit(
@@ -454,6 +497,8 @@ library dHedgeHelper {
                     _feeCollected
                 );
             }
+
+            console.log("Token: %s; amount: %s", _depositToken, _depositBalance);
 
             // Deposit the tokens into the dHedge pool
             uint256 _liquidityMinted = _poolLogic.deposit(
@@ -546,21 +591,21 @@ library dHedgeHelper {
         uint256 _permDistAmount = _tokenData.permDistAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
 
-        _tokenData.permDistAmount = 0;
-        _tokenData.tempDistAmount = 0;
-
         if (_permDistAmount > 0) {
+            _tokenData.permDistAmount = 0;
+
             _DHPTx.distribute(
                 _permDistIndex,
                 _permDistAmount - _tempDistAmount
             );
+        }
 
-            // If there were some units in temporary index then create a new temporary index
-            if (_tempDistAmount > 0) {
-                _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+        // If there were some units in temporary index then create a new temporary index
+        if (_tempDistAmount > 0) {
+            _tokenData.tempDistAmount = 0;
+            _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
 
-                return true;
-            }
+            return true;
         }
 
         return false;
@@ -594,13 +639,17 @@ library dHedgeHelper {
         uint128 _totalIndexUnits2 = _totalIndexApprovedUnits2 +
             _totalIndexPendingUnits2;
 
+        console.log(
+            "Total index units 1 and 2: %s, %s",
+            _totalIndexUnits1,
+            _totalIndexUnits2
+        );
+
         return
             ((
                 (_lockedIndexId == _permDistIndex1)
                     ? _totalIndexUnits2
                     : _totalIndexUnits1
-            ) * _superTokenBalance) /
-            _totalIndexUnits2 +
-            _totalIndexUnits1;
+            ) * _superTokenBalance) / (_totalIndexUnits1 + _totalIndexUnits2);
     }
 }
