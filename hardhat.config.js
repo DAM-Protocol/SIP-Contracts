@@ -33,7 +33,7 @@ module.exports = {
       initialBaseFeePerGas: 0, // workaround from https://github.com/sc-forks/solidity-coverage/issues/652#issuecomment-896330136 . Remove when that issue is closed.
       forking: {
         url: process.env.POLYGON_NODE_URL,
-        blockNumber: 25495628,
+        blockNumber: 25295628,
         enabled: true,
       },
       blockGasLimit: 20000000,
