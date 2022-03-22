@@ -563,7 +563,7 @@ describe("dHedgeCore Math Testing", function () {
    * @dev In this test we are also triggering dHedge deposit and then checking whether the function works
    * as expected.
    */
-  it.only("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
+  it("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
@@ -603,6 +603,8 @@ describe("dHedgeCore Math Testing", function () {
       .exec(USDCWhale);
 
     await increaseTime(getSeconds(1));
+
+    console.log("Reached after update");
 
     await app.dHedgeDeposit(USDCContract.address);
 
@@ -1063,6 +1065,7 @@ describe("dHedgeCore Math Testing", function () {
     await app.dHedgeDeposit(USDCContract.address);
 
     await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(app.address);
 
     // Ideally, no DHP tokens should be left in the contract
     // although some amount can be left due to rounding errors.
@@ -1072,21 +1075,6 @@ describe("dHedgeCore Math Testing", function () {
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-    // Following commented block isn't really necessary as no deposit will be made anyway (no stream exists and no uninvested amount too)
-    // await sf.cfaV1
-    //   .deleteFlow({
-    //     superToken: USDC.superToken,
-    //     sender: admin.address,
-    //     receiver: app.address,
-    //   })
-    //   .exec(admin);
-
-    // await increaseTime(getSeconds(30));
-
-    // await app.dHedgeDeposit(USDCContract.address);
-
-    // await printDHPTxBalance(admin.address);
   });
 
   /**
@@ -1179,7 +1167,7 @@ describe("dHedgeCore Math Testing", function () {
     // await printDHPTxBalance(admin.address);
   });
 
-  it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
+  it.only("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -1195,6 +1183,17 @@ describe("dHedgeCore Math Testing", function () {
 
     await printDHPTxBalance(admin.address);
     await printDHPTxBalance(USDCWhale.address);
+    await printDHPTxBalance(app.address);
+
+    await expect(app.distribute(USDC.token)).to.be.reverted;
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(USDCWhale.address);
+    await printDHPTxBalance(app.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -1227,6 +1226,15 @@ describe("dHedgeCore Math Testing", function () {
 
     await printDHPTxBalance(admin.address);
     await printDHPTxBalance(USDCWhale.address);
+    await printDHPTxBalance(app.address);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    await printDHPTxBalance(admin.address);
+    await printDHPTxBalance(USDCWhale.address);
+    await printDHPTxBalance(app.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -1251,12 +1259,9 @@ describe("dHedgeCore Math Testing", function () {
       })
       .exec(USDCWhale);
 
-    await increaseTime(getSeconds(30));
-
-    await app.dHedgeDeposit(USDCContract.address);
-
     await printDHPTxBalance(admin.address);
     await printDHPTxBalance(USDCWhale.address);
+    await printDHPTxBalance(app.address);
   });
 
   it("should calculate fees correctly", async () => {

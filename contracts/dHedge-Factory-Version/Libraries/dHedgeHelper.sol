@@ -147,8 +147,7 @@ library dHedgeHelper {
 
         // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
         // Because of this, we can proceed with next cycle of deposits without locking previous cycles' DHPT.
-        if (_poolLogic.getExitRemainingCooldown(address(this)) == 0)
-            _DHPTx.upgrade(_DHPTx.balanceOf(address(this)));
+        _upgradeDHPTx(_poolLogic, _DHPTx);
 
         uint32 _lockedIndexId = tokenData.lockedIndexId;
         uint32 _permDistIndex1 = tokenData.permDistIndex1;
@@ -219,6 +218,9 @@ library dHedgeHelper {
         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
             _depositToken
         ];
+        ISuperToken _DHPTx = _dHedgePool.DHPTx;
+
+        _upgradeDHPTx(IPoolLogic(_dHedgePool.poolLogic), _DHPTx);
 
         require(
             tokenData.lockedIndexId != 0,
@@ -227,7 +229,7 @@ library dHedgeHelper {
 
         _distribute(
             tokenData,
-            _dHedgePool.DHPTx,
+            _DHPTx,
             (tokenData.lockedIndexId == tokenData.permDistIndex1)
                 ? tokenData.permDistIndex1
                 : tokenData.permDistIndex2,
@@ -498,7 +500,11 @@ library dHedgeHelper {
                 );
             }
 
-            console.log("Token: %s; amount: %s", _depositToken, _depositBalance);
+            console.log(
+                "Token: %s; amount: %s",
+                _depositToken,
+                _depositBalance
+            );
 
             // Deposit the tokens into the dHedge pool
             uint256 _liquidityMinted = _poolLogic.deposit(
@@ -591,6 +597,12 @@ library dHedgeHelper {
         uint256 _permDistAmount = _tokenData.permDistAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
 
+        console.log(
+            "Distribution amount: %s, DHPTx balance: %s",
+            _permDistAmount,
+            _DHPTx.balanceOf(address(this))
+        );
+
         if (_permDistAmount > 0) {
             _tokenData.permDistAmount = 0;
 
@@ -609,6 +621,17 @@ library dHedgeHelper {
         }
 
         return false;
+    }
+
+    function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
+        if (
+            _poolLogic.getExitRemainingCooldown(address(this)) == 0 &&
+            _DHPTx.balanceOf(address(this)) > 0
+        ) {
+            _DHPTx.upgrade(
+                IERC20Mod(address(_poolLogic)).balanceOf(address(this))
+            );
+        }
     }
 
     function _getSuperTokenDepositBalance(
