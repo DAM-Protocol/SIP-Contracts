@@ -626,12 +626,17 @@ library dHedgeHelper {
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
         if (
             _poolLogic.getExitRemainingCooldown(address(this)) == 0 &&
-            _DHPTx.balanceOf(address(this)) > 0
+            IERC20Mod(address(_poolLogic)).balanceOf(address(this)) > 0
         ) {
             _DHPTx.upgrade(
                 IERC20Mod(address(_poolLogic)).balanceOf(address(this))
             );
         }
+
+        console.log(
+            "Supertoken balance of contract: %s",
+            _DHPTx.balanceOf(address(this))
+        );
     }
 
     function _getSuperTokenDepositBalance(

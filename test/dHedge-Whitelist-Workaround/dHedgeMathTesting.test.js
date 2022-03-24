@@ -298,7 +298,7 @@ describe("dHedgeCore Math Testing", function () {
    * @dev Ideally we would have liked to test for app jail scenario but by design, it shouldn't fail.
    * Maybe we can create a mock contract which can be jailed and then test if this function works ?
    */
-  it.skip("Should be able to close a stream if user is low on supertokens", async () => {
+  it("Should be able to close a stream if user is low on supertokens", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
@@ -323,7 +323,7 @@ describe("dHedgeCore Math Testing", function () {
     ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
-  it.skip("Should take/give correct amount of upfront fee (single depositor)", async () => {
+  it("Should take/give correct amount of upfront fee (single depositor)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
@@ -1167,7 +1167,7 @@ describe("dHedgeCore Math Testing", function () {
     // await printDHPTxBalance(admin.address);
   });
 
-  it.only("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
+  it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");

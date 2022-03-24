@@ -44,6 +44,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         poolData.factory = msg.sender;
         poolData.DHPTx = _DHPTx;
         poolData.poolLogic = _dHedgePool;
+        poolData.latestDistIndex = 1;
 
         IERC20(_dHedgePool).safeIncreaseAllowance(
             address(_DHPTx),
