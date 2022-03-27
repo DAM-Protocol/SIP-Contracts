@@ -248,8 +248,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             "dHedgeCore: Supertoken not supported"
         );
 
-        console.log("Reached before agreement");
-
         _cbdata = abi.encode(0, false);
     }
 
@@ -275,8 +273,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx,
             _cbdata
         );
-
-        console.log("Reached after agreement");
 
         emit StreamModified(_superToken, _user);
     }
@@ -320,8 +316,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _newCtx,
             _cbdata
         );
-
-        console.log("Reached here");
 
         emit StreamModified(_superToken, _user);
     }
@@ -373,6 +367,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         returns (bytes memory _modCtx) {
             _newCtx = _modCtx;
         } catch (bytes memory _error) {
+            console.log("Reverted");
             console.logBytes(_error);
         }
 

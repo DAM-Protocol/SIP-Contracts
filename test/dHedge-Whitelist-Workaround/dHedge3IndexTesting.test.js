@@ -15,7 +15,7 @@ const {
 } = require("../../helpers/helpers");
 const { constants } = require("ethers");
 
-describe("dHedgeCore Math Testing", function () {
+describe("3-Index Approach Testing", function () {
   const DAI = {
     token: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
     superToken: "0x1305f6b6df9dc47159d12eb7ac2804d4a33173c2",
@@ -242,8 +242,8 @@ describe("dHedgeCore Math Testing", function () {
     tokenDistIndex =
       tokenDistObj[3] === tokenDistObj[0] ? tokenDistObj[1] : tokenDistObj[0];
 
-    console.log("Token Dist Obj: ", tokenDistObj);
-    console.log("Token dist index: ", tokenDistIndex);
+    // console.log("Token Dist Obj: ", tokenDistObj);
+    // console.log("Token dist index: ", tokenDistIndex);
 
     approveOp = sf.idaV1.approveSubscription({
       indexId: tokenDistIndex,
@@ -285,285 +285,122 @@ describe("dHedgeCore Math Testing", function () {
     return currDHPTxBal;
   }
 
-  /**
-   * This test is for the function `emergencyCloseStream` in `dHedgeCore` contract.
-   * The logic for the function resides in `SFHelper` contract.
-   * This function should only close a user's stream if they don't have enough liquidity to
-   * last for more than 12 hours.
-   * @dev Ideally we would have liked to test for app jail scenario but by design, it shouldn't fail.
-   * Maybe we can create a mock contract which can be jailed and then test if this function works ?
-   */
-  it("Should be able to close a stream if user is low on supertokens", async () => {
+  it("Should assign correct indices", async () => {
     await loadFixture(setupEnv);
 
-    userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
-    // Increase time by 29 and a half days.
-    await increaseTime(getSeconds(29.5));
+    USDCWhaleRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 1,
+      subscriber: USDCWhaleAddr,
+      providerOrSigner: provider,
+    });
 
-    // This line shouldn't throw any error as it is expected to close the stream of the USDCWhale
-    await app.emergencyCloseStream(USDC.superToken, USDCWhale.address);
+    expect(USDCWhaleRes.exist).to.equal(true);
 
-    // DAIWhale has a balance of 9000 DAIx before start of the stream and after a day of streaming
-    // the balance should still be sufficient to last the stream for more than 12 hours
-    await startAndSub(DAIWhale, DAI, userFlowRate);
-
-    // Increase time by a day
     await increaseTime(getSeconds(1));
 
-    await expect(
-      app.emergencyCloseStream(DAI.superToken, DAIWhale.address)
-    ).to.be.revertedWith("SFHelper: No emergency close");
+    await app.dHedgeDeposit(USDC.token);
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
+    expect(tokenDistIndexObj[3]).to.equal(1);
+
+    await startAndSub(admin, USDC, userFlowRate);
+
+    adminRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 2,
+      subscriber: admin.address,
+      providerOrSigner: provider,
+    });
+
+    expect(adminRes.exist).to.equal(true);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: USDCWhaleAddr,
+        receiver: app.address,
+      })
+      .exec(USDCWhale);
+
+    USDCWhaleRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 1,
+      subscriber: USDCWhaleAddr,
+      providerOrSigner: provider,
+    });
+
+    expect(USDCWhaleRes.exist).to.equal(false);
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
+    USDCWhaleRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: tokenDistIndexObj[2],
+      subscriber: USDCWhaleAddr,
+      providerOrSigner: provider,
+    });
+
+    expect(USDCWhaleRes.exist).to.equal(true);
   });
 
-  it("Should take/give correct amount of upfront fee (single depositor)", async () => {
+  it("Should lock expected indices", async () => {
     await loadFixture(setupEnv);
 
-    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
 
-    // Increase time by a month
-    await increaseTime(getSeconds(30));
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
 
-    balanceBefore = await USDCx.balanceOf({
-      account: USDCWhale.address,
-      providerOrSigner: ethersProvider,
-    });
+    expect(tokenDistIndexObj[0]).to.equal(1);
+    expect(tokenDistIndexObj[1]).to.equal(2);
+    expect(tokenDistIndexObj[3]).to.equal(2);
 
-    userFlowRate = parseUnits("200", 18).div(getBigNumber(getSeconds(30)));
+    await increaseTime(getSeconds(1));
 
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
+    await app.dHedgeDeposit(USDC.token);
 
-    balanceAfter = await USDCx.balanceOf({
-      account: USDCWhale.address,
-      providerOrSigner: ethersProvider,
-    });
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
 
-    expect(
-      getBigNumber(balanceBefore).sub(getBigNumber(balanceAfter))
-    ).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+    expect(tokenDistIndexObj[3]).to.equal(1);
 
-    userFlowRate = parseUnits("50", 18).div(getBigNumber(getSeconds(30)));
+    await startAndSub(admin, USDC, userFlowRate);
 
-    balanceBefore = balanceAfter;
+    await increaseTime(getSeconds(1));
 
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
+    await app.dHedgeDeposit(USDC.token);
 
-    balanceAfter = await USDCx.balanceOf({
-      account: USDCWhale.address,
-      providerOrSigner: ethersProvider,
-    });
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
 
-    expect(
-      getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
-    ).to.be.closeTo(parseUnits("150", 18), parseUnits("1", 18));
-
-    balanceBefore = balanceAfter;
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhale.address,
-        receiver: app.address,
-      })
-      .exec(USDCWhale);
-
-    balanceAfter = await USDCx.balanceOf({
-      account: USDCWhale.address,
-      providerOrSigner: ethersProvider,
-    });
-
-    expect(
-      getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))
-    ).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
-  });
-
-  /**
-   * This test is for the function `calcUserUninvested` in `dHedgeCore` contract.
-   * The function's logic lies in both `dHedgeHelper` and `SFHelper` contracts.
-   * This function should be able to calculate uninvested amount share of a user after they start, update or terminate
-   * their streams.
-   * In this test, we don't trigger dHedge deposit.
-   * @dev When a stream is created, updated or terminated some amount is either taken from the user or transferred
-   * to the user. We have to check if these amounts are as expected.
-   */
-  it("Should be able to calculate uninvested amount correctly (no deposit)", async () => {
-    await loadFixture(setupEnv);
-
-    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
-
-    await startAndSub(USDCWhale, USDC, userFlowRate);
-
-    // Increase time by a month
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount: ", currUninvested.toString());
-
-    // We expect the uninvested amount to equal the amount of USDCx we streamed (in this case 100 USDCx)
-    expect(currUninvested).to.be.closeTo(
-      parseUnits("100", 18),
-      parseUnits("1", 18)
-    );
-
-    userFlowRate = parseUnits("20", 18).div(getBigNumber(getSeconds(30)));
-
-    // balanceBefore = await USDCx.balanceOf({
-    //   account: USDCWhale.address,
-    //   providerOrSigner: ethersProvider,
-    // });
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
-
-    // balanceAfter = await USDCx.balanceOf({
-    //   account: USDCWhale.address,
-    //   providerOrSigner: ethersProvider,
-    // });
-
-    // expect(getBigNumber(balanceBefore).sub(getBigNumber(balanceAfter))).to.be.closeTo(parseUnits(""))
-
-    // Increase time by a month
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount: ", currUninvested.toString());
-
-    // We expect the uninvested amount to equal:
-    // - the amount of USDCx we streamed after updating (in this case 20 USDCx) +
-    // - the amount of USDCx taken as an upfront fee during updation of stream (in this case another 20 USDCx)
-    expect(currUninvested).to.be.closeTo(
-      parseUnits("40", 18),
-      parseUnits("1", 18)
-    );
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhale.address,
-        receiver: app.address,
-      })
-      .exec(USDCWhale);
-
-    // Increase time by a month
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount", currUninvested.toString());
-
-    // We expect the uninvested amount to be 0 in this case as we already returned uninvested amount after the stream
-    // was updated
-    expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-    // Now we will test for the same conditions again
-    userFlowRate = parseUnits("50", 18).div(getBigNumber(getSeconds(30)));
-
-    await sf.cfaV1
-      .createFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
-
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount", currUninvested.toString());
-
-    expect(currUninvested).to.be.closeTo(
-      parseUnits("200", 18),
-      parseUnits("1", 18)
-    );
-
-    userFlowRate = parseUnits("30", 18).div(getBigNumber(getSeconds(30)));
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(USDCWhale);
-
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount", currUninvested.toString());
-
-    // We expect the uninvested amount to equal:
-    // - the amount of USDCx we streamed after updating (in this case 30 USDCx) +
-    // - the amount of USDCx taken as an upfront fee during updation of stream (in this case another 120 USDCx)
-    expect(currUninvested).to.be.closeTo(
-      parseUnits("150", 18),
-      parseUnits("1", 18)
-    );
-
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhale.address,
-        receiver: app.address,
-      })
-      .exec(USDCWhale);
-
-    await increaseTime(getSeconds(30));
-
-    currUninvested = await app.calcUserUninvested(
-      USDCWhale.address,
-      USDCContract.address
-    );
-    // console.log("Current uninvested amount", currUninvested.toString());
-
-    expect(currUninvested).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+    expect(tokenDistIndexObj[3]).to.equal(2);
   });
 
   /**
    * This test is for the same function as the above test.
    * @dev In this test we are also triggering dHedge deposit and then checking whether the function works
    * as expected.
+   * Note: This test is different in that we are gonna check for different users in different indices (3-index approach)
    */
-  it.only("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
+  it("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     await startAndSub(USDCWhale, USDC, userFlowRate);
+
+    whaleDistIndex = await app.getUserDistIndex(USDCWhale.address);
+
+    expect(whaleDistIndex).to.equal(1);
 
     // Increase time by a day
     await increaseTime(getSeconds(1));
@@ -574,11 +411,30 @@ describe("dHedgeCore Math Testing", function () {
     // Increase time by a day again
     await increaseTime(getSeconds(1));
 
-    currUninvested = await app.calcUserUninvested(
+    currUninvestedWhale = await app.calcUserUninvested(
       USDCWhale.address,
       USDCContract.address
     );
-    // console.log("Current uninvested amount", currUninvested.toString());
+
+    // We expect the uninvested amount to equal streamed amount after deposit was made
+    // Since we streamed for one day after the deposit, expected is 3 USDCx (@ 90 USDCx/mo)
+    expect(currUninvested).to.be.closeTo(
+      parseUnits("3", 18),
+      parseUnits("1", 18)
+    );
+
+    await startAndSub(admin, USDC, userFlowRate);
+
+    adminDistIndex = await app.getUserDistIndex(admin.address);
+
+    expect(adminDistIndex).to.equal(2);
+
+    await increaseTime(getSeconds(1));
+
+    currUninvestedAdmin = await app.calcUserUninvested(
+      admin.address,
+      USDCContract.address
+    );
 
     // We expect the uninvested amount to equal streamed amount after deposit was made
     // Since we streamed for one day after the deposit, expected is 3 USDCx (@ 90 USDCx/mo)
@@ -598,8 +454,6 @@ describe("dHedgeCore Math Testing", function () {
       .exec(USDCWhale);
 
     await increaseTime(getSeconds(1));
-
-    console.log("Reached after update");
 
     await app.dHedgeDeposit(USDCContract.address);
 

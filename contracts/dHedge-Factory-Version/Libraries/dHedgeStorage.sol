@@ -47,7 +47,8 @@ library dHedgeStorage {
         uint32 permDistIndex2;
         uint32 tempDistIndex;
         uint32 lockedIndexId;
-        uint64 lastDepositAt;
+        uint64 lastDepositAt1;
+        uint64 lastDepositAt2;
         uint256 permDistAmount;
         uint256 tempDistAmount;
         mapping(address => uint32) assignedIndex; // Can only be 1 or 2 if assigned, else 0.
