@@ -37,6 +37,12 @@ library SFHelper {
         uint32 _index,
         uint256 _amount
     ) external returns (bytes memory _newCtx) {
+        console.log(
+            "Amount to distribute: %s, Index: %s, Address caller: %s",
+            _amount,
+            _index,
+            address(this)
+        );
         (uint256 _actualAmount, ) = IDA_V1.calculateDistribution(
             _superToken,
             address(this),
@@ -186,7 +192,7 @@ library SFHelper {
             _ctx
         );
     }
-    
+
     /**
      * @dev Function to close a stream
      * @dev This function should be called provided the app is jailed or user is running low on supertokens

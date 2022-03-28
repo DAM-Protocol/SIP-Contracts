@@ -77,7 +77,7 @@ library dHedgeHelper {
             tokenData.tempDistIndex = _latestDistIndex + 2;
 
             // We will start the stream of the supertoken using index 1 and hence, index 2 is locked.
-            tokenData.lockedIndexId = _latestDistIndex + 2;
+            tokenData.lockedIndexId = _latestDistIndex + 1;
             _dHedgePool.latestDistIndex += 3;
 
             tokenData.superToken = _superToken;
@@ -581,7 +581,7 @@ library dHedgeHelper {
             // Calculating a user's pending locked tokens amount by using units issued to the user,
             // total units issued and total amount of DHPT in this contract (this is the locked amount)
             _tokenData.tempDistAmount +=
-                (_userUnits * _DHPTx.balanceOf(address(this))) /
+                (_userUnits * _tokenData.permDistAmount) /
                 (_totalLockedIndexApprovedUnits +
                     _totalLockedIndexPendingUnits);
 
@@ -637,18 +637,23 @@ library dHedgeHelper {
         if (_permDistAmount > 0) {
             _tokenData.permDistAmount = 0;
 
-            _DHPTx.distribute(
-                _permDistIndex,
-                _permDistAmount - _tempDistAmount
-            );
-        }
+            if (_permDistAmount - _tempDistAmount != 0) {
+                console.log("Perm dist index: %s", _permDistIndex);
+                _DHPTx.distribute(
+                    _permDistIndex,
+                    _permDistAmount - _tempDistAmount
+                );
+            }
 
-        // If there were some units in temporary index then create a new temporary index
-        if (_tempDistAmount > 0) {
-            _tokenData.tempDistAmount = 0;
-            _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+            // If there were some units in temporary index then create a new temporary index
+            if (_tempDistAmount > 0) {
+                console.log("Temporary dist index: %s", _tempDistIndex);
 
-            return true;
+                _tokenData.tempDistAmount = 0;
+                _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+
+                return true;
+            }
         }
 
         return false;
@@ -663,11 +668,6 @@ library dHedgeHelper {
                 IERC20Mod(address(_poolLogic)).balanceOf(address(this))
             );
         }
-
-        console.log(
-            "Supertoken balance of contract: %s",
-            _DHPTx.balanceOf(address(this))
-        );
     }
 
     function _getSuperTokenDepositBalance(

@@ -558,8 +558,10 @@ describe("dHedgeCore Math Testing", function () {
    * @dev In this test we are also triggering dHedge deposit and then checking whether the function works
    * as expected.
    */
-  it.only("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
+  it("Should be able to calculate uninvested amount correctly (with deposits)", async () => {
     await loadFixture(setupEnv);
+
+    console.log("App address: ", app.address);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
