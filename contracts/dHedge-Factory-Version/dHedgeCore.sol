@@ -248,7 +248,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             "dHedgeCore: Supertoken not supported"
         );
 
-        _cbdata = abi.encode(0, false);
+        _cbdata = abi.encode(0);
     }
 
     /// @dev Maybe use `_afterAgreement` hook here ?

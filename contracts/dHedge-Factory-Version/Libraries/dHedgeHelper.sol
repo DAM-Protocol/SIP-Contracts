@@ -10,6 +10,8 @@ import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
 import "hardhat/console.sol";
 
+// Note: Required to check if distribution indices indeed exist or not when making deposits or distributions.
+
 /**
  * @title Modified IERC20 interface
  * @dev This interface is used to access decimals of an ERC20 token
@@ -48,6 +50,7 @@ library dHedgeHelper {
         uint256 amount
     );
 
+    /// @dev Do we need to change lockActive status ?
     function initStreamToken(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         ISuperToken _superToken
@@ -149,80 +152,82 @@ library dHedgeHelper {
         ISuperToken _superToken = tokenData.superToken;
         ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
-        uint256 _superTokenBalance = _superToken.balanceOf(address(this));
-
-        // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
-        // Because of this, we can proceed with next cycle of deposits without locking previous cycles' DHPT.
-        _upgradeDHPTx(_poolLogic, _DHPTx);
-
         uint32 _lockedIndexId = tokenData.lockedIndexId;
         uint32 _permDistIndex1 = tokenData.permDistIndex1;
         uint32 _permDistIndex2 = tokenData.permDistIndex2;
         uint32 _tempDistIndex = tokenData.tempDistIndex;
+        uint256 _superTokenBalance = _superToken.balanceOf(address(this));
 
-        // Distribute DHPT locked in the previous permanent index and create a
-        // new temporary index if `_distribute` function returns true.
-        // If no indices were locked then no distribution is necessary.
-        if (
-            _lockedIndexId != 0 &&
+        if (tokenData.lockActive) {
+            // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
+            // This is because we have to proceed with next cycle of deposits without locking previous cycles' DHPT.
+            _upgradeDHPTx(_poolLogic, _DHPTx);
+
+            // Distribute DHPT locked in the previous permanent index and create a
+            // new temporary index if `_distribute` function returns true.
+            // If no indices were locked i.e, lock is inactive then no distribution is necessary.
             _distribute(
+                _dHedgePool,
                 tokenData,
                 _DHPTx,
-                (_lockedIndexId == _permDistIndex1)
-                    ? _permDistIndex1
-                    : _permDistIndex2,
+                _lockedIndexId,
                 _tempDistIndex
-            )
-        ) {
-            uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
-
-            // Create new temporary index.
-            _DHPTx.createIndex(_latestDistIndex);
-
-            // Store the index Id of the temporary index.
-            tokenData.tempDistIndex = _latestDistIndex;
-
-            // Increment the total index id value of the core contract.
-            ++_dHedgePool.latestDistIndex;
+            );
         }
 
         // If the asset is currently accepted as deposit asset then perform deposit transaction.
         if (_supportLogic.isDepositAsset(_depositToken)) {
-            // Downgrade amount of supertoken required for deposit.
-            _superToken.downgrade(
-                _getSuperTokenDepositBalance(
-                    _DHPTx,
-                    _lockedIndexId,
-                    _permDistIndex1,
-                    _permDistIndex2,
-                    _superTokenBalance
-                )
+            // uint32 _currIndex = (_lockedIndexId == _permDistIndex1 &&
+            //     _tempDistIndex != 0)
+            //     ? _permDistIndex2
+            //     : _permDistIndex1;
+
+            // We calculate the amount of tokens to deposit for an index.
+            // We are comparing `_tempDistIndex` value to avoid calculating amount for an index not in existence.
+            // That is, if `_tempDistIndex` is greater than 0, it means `_permDistIndex2` was used sometime. 
+            uint256 _downgradeAmount = _getSuperTokenDepositBalance(
+                _DHPTx,
+                (_lockedIndexId == _permDistIndex1 && _tempDistIndex != 0)
+                    ? _permDistIndex2
+                    : _permDistIndex1,
+                _permDistIndex1,
+                _permDistIndex2,
+                _superTokenBalance
             );
 
-            // Actual deposit logic.
-            _deposit(
-                tokenData,
-                _depositToken,
-                IdHedgeCoreFactory(_dHedgePool.factory),
-                _poolLogic
-            );
+            // If there is anything to deposit, only then should the deposit proceed.
+            // Index shouldn't be unlocked or locked otherwise.
+            if (_downgradeAmount > 0) {
+                // Downgrade amount of supertoken required for deposit.
+                _superToken.downgrade(_downgradeAmount);
 
-            // Lock the index which wasn't locked last time and record the time of locking/deposit.
-            if (_lockedIndexId == _permDistIndex1) {
-                tokenData.lockedIndexId = _permDistIndex2;
-                tokenData.lastDepositAt2 = uint64(block.timestamp);
-            } else {
-                tokenData.lockedIndexId = _permDistIndex1;
-                tokenData.lastDepositAt1 = uint64(block.timestamp);
+                // Actual deposit logic.
+                _deposit(
+                    tokenData,
+                    _depositToken,
+                    IdHedgeCoreFactory(_dHedgePool.factory),
+                    _poolLogic
+                );
+
+                // Lock the index which wasn't locked last time and record the time of locking/deposit.
+                if (_lockedIndexId == _permDistIndex1 && _tempDistIndex != 0) {
+                    tokenData.lockedIndexId = _permDistIndex2;
+                    tokenData.lastDepositAt2 = uint64(block.timestamp);
+                } else {
+                    tokenData.lockedIndexId = _permDistIndex1;
+                    tokenData.lastDepositAt1 = uint64(block.timestamp);
+                }
+
+                _dHedgePool.lastDepositAt = uint64(block.timestamp);
+
+                tokenData.lockActive = true;
             }
 
-            _dHedgePool.lastDepositAt = uint64(block.timestamp);
-        } else {
-            // Unlock all indices to avoid unnecessary index migrations.
-            tokenData.lockedIndexId = 0;
+            console.log(
+                "Deposit for index %s complete",
+                tokenData.lockedIndexId
+            );
         }
-
-        console.log("Locked index id: %s", tokenData.lockedIndexId);
     }
 
     function distribute(
@@ -234,14 +239,13 @@ library dHedgeHelper {
         ];
         ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
+        require(tokenData.lockActive, "dHedgeHelper: No amount to distribute");
+
+        // Upgrade the DHPT in the contract.
         _upgradeDHPTx(IPoolLogic(_dHedgePool.poolLogic), _DHPTx);
 
-        require(
-            tokenData.lockedIndexId != 0,
-            "dHedgeHelper: No amount to distribute"
-        );
-
         _distribute(
+            _dHedgePool,
             tokenData,
             _DHPTx,
             (tokenData.lockedIndexId == tokenData.permDistIndex1)
@@ -275,22 +279,26 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            (uint256 _userUninvested, bool _migrationRequired) = abi.decode(
-                _cbdata,
-                (uint256, bool)
-            );
-
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
             ISuperToken _superToken = tokenData.superToken;
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
+            // bool _lockActive = tokenData.lockActive;
+            bool _isNewFlow = SFHelper
+                .HOST
+                .decodeCtx(_newCtx)
+                .agreementSelector ==
+                IConstantFlowAgreementV1.createFlow.selector;
+
+            uint32 _lockedIndexId = tokenData.lockedIndexId;
+            uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             // If this the first stream corresponding to a new supertoken
             // then change the `lastDepositAt` of the active index to reflect the beginning of the
             // new supertoken market.
             if (
-                tokenData.lockedIndexId == tokenData.permDistIndex1 &&
+                _lockedIndexId == tokenData.permDistIndex1 &&
                 tokenData.lastDepositAt2 == 0
             ) {
                 tokenData.lastDepositAt2 = uint64(block.timestamp);
@@ -298,34 +306,41 @@ library dHedgeHelper {
                 tokenData.lastDepositAt1 = uint64(block.timestamp);
             }
 
+            uint32 _index;
+            if (!_isNewFlow && tokenData.lockActive) {
+                _index = (_lockedIndexId == tokenData.permDistIndex1)
+                    ? tokenData.permDistIndex2
+                    : tokenData.permDistIndex1;
+                _newCtx = _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
+            } else {
+                if (_isNewFlow) {
+                    _index = (_lockedIndexId == tokenData.permDistIndex1)
+                        ? tokenData.permDistIndex2
+                        : tokenData.permDistIndex1;
+
+                    // If the user hasn't been assigned an index yet then assign the current active one.
+                    if (tokenData.assignedIndex[_sender] == 0)
+                        tokenData.assignedIndex[_sender] = _index;
+                } else {
+                    _index = tokenData.assignedIndex[_sender];
+                }
+            }
+
             _transferBuffer(
                 _superToken,
                 _sender,
-                (tokenData.lockedIndexId == tokenData.permDistIndex1)
-                    ? tokenData.lastDepositAt2
-                    : tokenData.lastDepositAt1,
+                (_index == tokenData.permDistIndex1)
+                    ? tokenData.lastDepositAt1
+                    : tokenData.lastDepositAt2,
                 _userUninvested
             );
 
-            if (_migrationRequired)
-                _newCtx = _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
-            else {
-                uint32 _currActiveIndex = (tokenData.lockedIndexId ==
-                    tokenData.permDistIndex1)
-                    ? tokenData.permDistIndex2
-                    : tokenData.permDistIndex1;
-
-                // If the user hasn't been assigned an index yet then assign the current active one.
-                if (tokenData.assignedIndex[_sender] == 0)
-                    tokenData.assignedIndex[_sender] = _currActiveIndex;
-
-                // Assigning new units in the active index
-                _newCtx = _superToken.updateSharesInCallback(
-                    _DHPTx,
-                    _currActiveIndex,
-                    _newCtx
-                );
-            }
+            // Assigning new units in the active index
+            _newCtx = _superToken.updateSharesInCallback(
+                _DHPTx,
+                _index,
+                _newCtx
+            );
         }
     }
 
@@ -353,8 +368,7 @@ library dHedgeHelper {
             address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
 
             _cbdata = abi.encode(
-                calcUserUninvested(_dHedgePool, _sender, _underlyingToken),
-                true
+                calcUserUninvested(_dHedgePool, _sender, _underlyingToken)
             );
         }
     }
@@ -523,11 +537,11 @@ library dHedgeHelper {
                 );
             }
 
-            console.log(
-                "Token: %s; amount: %s",
-                _depositToken,
-                _depositBalance
-            );
+            // console.log(
+            //     "Token: %s; amount: %s",
+            //     _depositToken,
+            //     _depositBalance
+            // );
 
             // Deposit the tokens into the dHedge pool
             uint256 _liquidityMinted = _poolLogic.deposit(
@@ -560,6 +574,12 @@ library dHedgeHelper {
         uint32 _currActiveIndex = (_lockedIndexId == _tokenData.permDistIndex1)
             ? _tokenData.permDistIndex2
             : _tokenData.permDistIndex1;
+
+        console.log(
+            "Assigned index of %s: %s",
+            _sender,
+            _tokenData.assignedIndex[_sender]
+        );
 
         // If assigned index is currently locked then we will have to initiate index migration.
         if (_tokenData.assignedIndex[_sender] == _lockedIndexId) {
@@ -617,46 +637,68 @@ library dHedgeHelper {
         } else {
             delete _tokenData.assignedIndex[_sender];
         }
+
+        console.log(
+            "%s current perm index: %s",
+            _sender,
+            _tokenData.assignedIndex[_sender]
+        );
     }
 
     function _distribute(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
         dHedgeStorage.TokenData storage _tokenData,
         ISuperToken _DHPTx,
         uint32 _permDistIndex,
         uint32 _tempDistIndex
-    ) private returns (bool) {
-        uint256 _permDistAmount = _tokenData.permDistAmount;
+    ) private {
+        uint256 _totalDistAmount = _tokenData.permDistAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
+        uint256 _actualPermDistAmount = _totalDistAmount - _tempDistAmount;
 
-        console.log(
-            "Distribution amount: %s, DHPTx balance: %s",
-            _permDistAmount,
-            _DHPTx.balanceOf(address(this))
-        );
+        // console.log(
+        //     "Distribution amount: %s, DHPTx balance: %s",
+        //     _permDistAmount,
+        //     _DHPTx.balanceOf(address(this))
+        // );
 
-        if (_permDistAmount > 0) {
+        if (_totalDistAmount > 0) {
             _tokenData.permDistAmount = 0;
 
-            if (_permDistAmount - _tempDistAmount != 0) {
-                console.log("Perm dist index: %s", _permDistIndex);
-                _DHPTx.distribute(
-                    _permDistIndex,
-                    _permDistAmount - _tempDistAmount
-                );
+            if (_actualPermDistAmount != 0) {
+                // console.log("Perm dist index: %s", _permDistIndex);
+                _DHPTx.distribute(_permDistIndex, _actualPermDistAmount);
             }
 
             // If there were some units in temporary index then create a new temporary index
             if (_tempDistAmount > 0) {
-                console.log("Temporary dist index: %s", _tempDistIndex);
+                // console.log("Temporary dist index: %s", _tempDistIndex);
 
                 _tokenData.tempDistAmount = 0;
                 _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
 
-                return true;
+                // Create new temporary index
+                _createTempIndex(_dHedgePool, _tokenData, _DHPTx);
             }
         }
 
-        return false;
+        _tokenData.lockActive = false;
+    }
+
+    function _createTempIndex(
+        dHedgeStorage.dHedgePool storage _dHedgePool,
+        dHedgeStorage.TokenData storage _tokenData,
+        ISuperToken _DHPTx
+    ) private {
+        uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
+
+        // Create new temporary index.
+        _DHPTx.createIndex(_latestDistIndex);
+
+        // Store the index Id of the temporary index.
+        _tokenData.tempDistIndex = _latestDistIndex;
+
+        ++_dHedgePool.latestDistIndex;
     }
 
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
@@ -672,7 +714,7 @@ library dHedgeHelper {
 
     function _getSuperTokenDepositBalance(
         ISuperToken _DHPTx,
-        uint32 _lockedIndexId,
+        uint32 _currDistIndex,
         uint32 _permDistIndex1,
         uint32 _permDistIndex2,
         uint256 _superTokenBalance
@@ -706,7 +748,7 @@ library dHedgeHelper {
 
         return
             ((
-                (_lockedIndexId == _permDistIndex1)
+                (_currDistIndex == _currDistIndex)
                     ? _totalIndexUnits2
                     : _totalIndexUnits1
             ) * _superTokenBalance) / (_totalIndexUnits1 + _totalIndexUnits2);

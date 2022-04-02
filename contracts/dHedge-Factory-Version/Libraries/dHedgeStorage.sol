@@ -43,6 +43,7 @@ library dHedgeStorage {
      */
     struct TokenData {
         ISuperToken superToken;
+        bool lockActive;
         uint32 permDistIndex1;
         uint32 permDistIndex2;
         uint32 tempDistIndex;
@@ -51,7 +52,7 @@ library dHedgeStorage {
         uint64 lastDepositAt2;
         uint256 permDistAmount;
         uint256 tempDistAmount;
-        mapping(address => uint32) assignedIndex; // Can only be 1 or 2 if assigned, else 0.
+        mapping(address => uint32) assignedIndex;
     }
 
     /**

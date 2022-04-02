@@ -285,14 +285,6 @@ library SFHelper {
         ) = getFlow(_superToken, _user);
         uint256 _userFlowRate = uint256(uint96(_flowRate));
 
-        // return
-        //     _userFlowRate *
-        //     (block.timestamp -
-        //         (
-        //             (_userPrevUpdateTimestamp > _lastDepositAt)
-        //                 ? _userPrevUpdateTimestamp
-        //                 : _lastDepositAt
-        //         ));
         return _userFlowRate * (block.timestamp - _lastDepositAt);
     }
 
@@ -314,28 +306,4 @@ library SFHelper {
             address(this)
         );
     }
-
-    // function toUnderlyingAmount(uint256 _amount, uint256 _underlyingDecimals)
-    //     internal
-    //     pure
-    //     returns (uint256 _underlyingAmount, uint256 _adjustedAmount)
-    // {
-    //     uint256 factor;
-    //     if (_underlyingDecimals < 18) {
-    //         // If underlying has less decimals
-    //         // one can upgrade less "granular" amount of tokens
-    //         factor = 10**(18 - _underlyingDecimals);
-    //         _underlyingAmount = _amount / factor;
-    //         // remove precision errors
-    //         _adjustedAmount = _underlyingAmount * factor;
-    //     } else if (_underlyingDecimals > 18) {
-    //         // If underlying has more decimals
-    //         // one can upgrade more "granular" amount of tokens
-    //         factor = 10**(_underlyingDecimals - 18);
-    //         _underlyingAmount = _amount * factor;
-    //         _adjustedAmount = _amount;
-    //     } else {
-    //         _underlyingAmount = _adjustedAmount = _amount;
-    //     }
-    // }
 }

@@ -274,16 +274,16 @@ describe("3-Index Approach Testing", function () {
     await sfGovernance.authorizeAppFactory(SFConfig.hostAddress, factoryAddr);
   }
 
-  async function printDHPTxBalance(accountAddr) {
-    currDHPTxBal = await DHPTx.balanceOf({
-      account: accountAddr,
-      providerOrSigner: ethersProvider,
-    });
+  // async function printDHPTxBalance(accountAddr) {
+  //   currDHPTxBal = await DHPTx.balanceOf({
+  //     account: accountAddr,
+  //     providerOrSigner: ethersProvider,
+  //   });
 
-    console.log(`Current DHPTx balance of ${accountAddr}: ${currDHPTxBal}`);
+  //   console.log(`Current DHPTx balance of ${accountAddr}: ${currDHPTxBal}`);
 
-    return currDHPTxBal;
-  }
+  //   return currDHPTxBal;
+  // }
 
   it("Should assign correct indices", async () => {
     await loadFixture(setupEnv);
@@ -390,7 +390,7 @@ describe("3-Index Approach Testing", function () {
    * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
    * - They should ideally match.
    */
-  it.only("Should distribute DHPTx correctly (single-token)", async () => {
+  it("Should distribute DHPTx correctly (single-token)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -513,10 +513,16 @@ describe("3-Index Approach Testing", function () {
     await startAndSub(admin, USDC, userFlowRate);
     await startAndSub(admin, DAI, userFlowRate);
 
-    await increaseTime(getSeconds(30));
+    await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(DAIContract.address);
     await app.dHedgeDeposit(USDCContract.address);
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+
+    expect(tokenDistIndexObjUSDC[3]).to.equal(1);
+    expect(tokenDistIndexObjDAI[3]).to.equal(4);
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
@@ -532,12 +538,11 @@ describe("3-Index Approach Testing", function () {
       })
     ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
 
-    await increaseTime(getSeconds(1));
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
 
-    await app.dHedgeDeposit(USDC.token);
-    await app.dHedgeDeposit(DAI.token);
-
-    DHPTBalance2 = await DHPT.balanceOf(app.address);
+    expect(tokenDistIndexObjUSDC[3]).to.equal(1);
+    expect(tokenDistIndexObjDAI[3]).to.equal(4);
 
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
@@ -556,6 +561,38 @@ describe("3-Index Approach Testing", function () {
         flowRate: userFlowRate,
       })
       .exec(admin);
+
+    // tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    // tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+
+    // await sf.idaV1
+    //   .approveSubscription({
+    //     indexId:
+    //       tokenDistIndexObjDAI[0] === tokenDistIndexObjDAI[3]
+    //         ? tokenDistIndexObjDAI[1]
+    //         : tokenDistIndexObjDAI[0],
+    //     superToken: DHPTx.address,
+    //     publisher: app.address,
+    //   })
+    //   .exec(admin);
+
+    // await sf.idaV1
+    //   .approveSubscription({
+    //     indexId:
+    //       tokenDistIndexObjUSDC[0] === tokenDistIndexObjUSDC[3]
+    //         ? tokenDistIndexObjUSDC[1]
+    //         : tokenDistIndexObjUSDC[0],
+    //     superToken: DHPTx.address,
+    //     publisher: app.address,
+    //   })
+    //   .exec(admin);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(DAI.token);
+
+    DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
@@ -646,28 +683,38 @@ describe("3-Index Approach Testing", function () {
 
     console.log("\n--Manual verification required for this test--\n");
 
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate1 = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate2 = parseUnits("45", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(admin, USDC, userFlowRate);
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, USDC, userFlowRate1);
+    await startAndSub(admin, USDC, userFlowRate2);
 
-    await increaseTime(getSeconds(30));
+    await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDCContract.address);
 
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-    await printDHPTxBalance(app.address);
-
-    await expect(app.distribute(USDC.token)).to.be.reverted;
+    DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
     await app.distribute(USDC.token);
 
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-    await printDHPTxBalance(app.address);
+    expect(
+      await DHPTx.balanceOf({
+        account: USDCWhaleAddr,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(
+      DHPTBalance1.mul(getBigNumber(2)).div(getBigNumber(3)),
+      parseUnits("0.001", 18)
+    );
+
+    expect(
+      await DHPTx.balanceOf({
+        account: admin.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(DHPTBalance1.div(getBigNumber(3)), parseUnits("0.001", 18));
 
     expect(
       await DHPTx.balanceOf({
@@ -676,39 +723,78 @@ describe("3-Index Approach Testing", function () {
       })
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
-    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate1 = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+    userFlowRate2 = parseUnits("30", 18).div(getBigNumber(getSeconds(30)));
 
     await sf.cfaV1
       .updateFlow({
         superToken: USDC.superToken,
         receiver: app.address,
-        flowRate: userFlowRate,
-      })
-      .exec(admin);
-
-    await sf.cfaV1
-      .updateFlow({
-        superToken: USDC.superToken,
-        receiver: app.address,
-        flowRate: userFlowRate,
+        flowRate: userFlowRate1,
       })
       .exec(USDCWhale);
 
-    await increaseTime(getSeconds(30));
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate2,
+      })
+      .exec(admin);
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId:
+          tokenDistIndexObjUSDC[0] === tokenDistIndexObjUSDC[3]
+            ? tokenDistIndexObjUSDC[1]
+            : tokenDistIndexObjUSDC[0],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId:
+          tokenDistIndexObjUSDC[0] === tokenDistIndexObjUSDC[3]
+            ? tokenDistIndexObjUSDC[1]
+            : tokenDistIndexObjUSDC[0],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(admin);
+
+    await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDCContract.address);
 
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-    await printDHPTxBalance(app.address);
+    DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
     await app.distribute(USDC.token);
 
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-    await printDHPTxBalance(app.address);
+    expect(
+      await DHPTx.balanceOf({
+        account: USDCWhaleAddr,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(
+      DHPTBalance2.add(DHPTBalance1).mul(getBigNumber(2)).div(getBigNumber(3)),
+      parseUnits("0.001", 18)
+    );
+
+    expect(
+      await DHPTx.balanceOf({
+        account: admin.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(
+      DHPTBalance2.add(DHPTBalance1).div(getBigNumber(3)),
+      parseUnits("0.001", 18)
+    );
 
     expect(
       await DHPTx.balanceOf({
@@ -717,13 +803,11 @@ describe("3-Index Approach Testing", function () {
       })
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
 
-    await sf.cfaV1
-      .deleteFlow({
-        superToken: USDC.superToken,
-        sender: admin.address,
-        receiver: app.address,
-      })
-      .exec(admin);
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    DHPTBalance3 = await DHPT.balanceOf(app.address);
 
     await sf.cfaV1
       .deleteFlow({
@@ -733,9 +817,63 @@ describe("3-Index Approach Testing", function () {
       })
       .exec(USDCWhale);
 
-    await printDHPTxBalance(admin.address);
-    await printDHPTxBalance(USDCWhale.address);
-    await printDHPTxBalance(app.address);
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: admin.address,
+        receiver: app.address,
+      })
+      .exec(admin);
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObjUSDC[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObjUSDC[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(admin);
+
+    await app.distribute(USDC.token);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: USDCWhaleAddr,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(
+      DHPTBalance3.add(DHPTBalance2)
+        .add(DHPTBalance1)
+        .mul(getBigNumber(2))
+        .div(getBigNumber(3)),
+      parseUnits("0.001", 18)
+    );
+
+    expect(
+      await DHPTx.balanceOf({
+        account: admin.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(
+      DHPTBalance3.add(DHPTBalance2).add(DHPTBalance1).div(getBigNumber(3)),
+      parseUnits("0.001", 18)
+    );
+
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
   it("should calculate fees correctly", async () => {
