@@ -150,8 +150,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         dHedgeStorage.TokenData storage tokenData = poolData.tokenData[_token];
         if (address(tokenData.superToken) != address(0))
             return (
-                tokenData.permDistIndex1,
-                tokenData.permDistIndex2,
+                tokenData.permDistIndex1.indexId,
+                tokenData.permDistIndex2.indexId,
                 tokenData.tempDistIndex,
                 tokenData.lockedIndexId
             );
