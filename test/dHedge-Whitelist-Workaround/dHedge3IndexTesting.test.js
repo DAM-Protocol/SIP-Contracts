@@ -515,8 +515,8 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(DAIContract.address);
     await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(DAIContract.address);
 
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
     tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);

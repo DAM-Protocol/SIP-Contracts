@@ -14,20 +14,11 @@ import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-co
 // solhint-disable contract-name-camelcase
 // solhint-disable var-name-mixedcase
 library dHedgeStorage {
-    /**
-     * @param uninvestedSum Uninvested amount of users assigned to a particular permanent index.
-     * @param netFlowRate Sum of flow rates of users assigned to a particular permanent index.
-     * @param lastUpdatedAt Timestamp when this index was last updated (stream creation/updation/termination).
-     * @param isLocked Boolean depicting if amount corresponding to this index was deposited and therefore,
-     * this index is under lock or not.
-     */
-    // struct PermIndexData {
-    //     // uint256 uninvestedSum; // Probably not required.
-    //     // uint96 netFlowRate; // Can we use total units instead ?
-    //     uint64 lastUpdatedAt; // Do we need to store this ?
-    //     uint32 indexId;
-    //     // bool isLocked; // Do we need to store this ?
-    // }
+    struct PermIndexData {
+        bool isActive;
+        uint64 lastDepositAt; // Do we need to store this ?
+        uint32 indexId;
+    }
 
     // struct TempIndexData {
     //     uint256 pendingAmount;
@@ -43,14 +34,11 @@ library dHedgeStorage {
      */
     struct TokenData {
         ISuperToken superToken;
-        bool lockActive;
-        uint32 permDistIndex1;
-        uint32 permDistIndex2;
+        PermIndexData permDistIndex1;
+        PermIndexData permDistIndex2;
         uint32 tempDistIndex;
         uint32 lockedIndexId;
-        uint64 lastDepositAt1;
-        uint64 lastDepositAt2;
-        uint256 permDistAmount;
+        uint256 distAmount;
         uint256 tempDistAmount;
         mapping(address => uint32) assignedIndex;
     }
