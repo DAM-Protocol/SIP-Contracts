@@ -38,7 +38,7 @@ library SFHelper {
         uint256 _amount
     ) external returns (bytes memory _newCtx) {
         console.log(
-            "Amount to distribute: %s, Index: %s, Address caller: %s",
+            "Amount to distribute: %s, Index: %s",
             _amount,
             _index,
             address(this)
@@ -64,7 +64,7 @@ library SFHelper {
             new bytes(0)
         );
 
-        // console.log("Actual amount distributed: %s", _actualAmount);
+        console.log("Actual amount distributed: %s", _actualAmount);
     }
 
     /**

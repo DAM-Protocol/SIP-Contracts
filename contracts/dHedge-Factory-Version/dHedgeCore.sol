@@ -266,7 +266,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
 
-        _newCtx = poolData.afterAgreement(
+        _newCtx = poolData.afterAgreementCreated(
             _user,
             _agreementClass,
             _superToken.getUnderlyingToken(),
@@ -309,7 +309,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
 
-        _newCtx = poolData.afterAgreement(
+        _newCtx = poolData.afterAgreementUpdated(
             _user,
             _agreementClass,
             _superToken.getUnderlyingToken(),
@@ -357,7 +357,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
 
         try
-            poolData.afterAgreement(
+            poolData.afterAgreementTerminated(
                 _user,
                 _agreementClass,
                 _superToken.getUnderlyingToken(),
