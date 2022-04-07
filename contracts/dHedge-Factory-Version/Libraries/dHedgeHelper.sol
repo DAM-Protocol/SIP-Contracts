@@ -72,7 +72,7 @@ library dHedgeHelper {
             "dHedgeHelper: Token already present"
         );
 
-        // Create 2 permanent indexes in accordance with `3-index` approach
+        // Create 2 permanent indices in accordance with `3-index` approach
 
         uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
         tokenData.permDistIndex1.indexId = _latestDistIndex;
@@ -84,15 +84,6 @@ library dHedgeHelper {
         _dHedgePool.latestDistIndex += 3;
 
         tokenData.superToken = _superToken;
-
-        // To calculate amount streamed after deployment but before first deposit
-        // tokenData.lastDepositAt = uint64(block.timestamp);
-
-        // console.log(
-        //     "Index for token %s: %s",
-        //     _underlyingToken,
-        //     tokenData.distIndex
-        // );
 
         bytes memory _newCtx = _dHedgePool.DHPTx.createIndex(_latestDistIndex);
 
@@ -268,163 +259,6 @@ library dHedgeHelper {
         );
     }
 
-    // /**
-    //  * @dev Helper function that's called after agreements are created, updated or terminated
-    //  * @param _agreementClass Address of the agreement calling this function
-    //  * @param _underlyingToken Address of the underlying token on which operations need to be performed
-    //  * @param _ctx Superfluid context object
-    //  * @param _cbdata Callback data we passed before agreement was created, updated or terminated
-    //  * @param _newCtx New Superfluid context object
-    //  */
-    // function afterAgreement(
-    //     dHedgeStorage.dHedgePool storage _dHedgePool,
-    //     address _sender,
-    //     address _agreementClass,
-    //     address _underlyingToken,
-    //     bytes memory _ctx,
-    //     bytes memory _cbdata
-    // ) external returns (bytes memory _newCtx) {
-    //     _newCtx = _ctx;
-
-    //     if (
-    //         ISuperAgreement(_agreementClass).agreementType() ==
-    //         keccak256(
-    //             "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
-    //         )
-    //     ) {
-    //         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
-    //             _underlyingToken
-    //         ];
-    //         ISuperToken _superToken = tokenData.superToken;
-    //         ISuperToken _DHPTx = _dHedgePool.DHPTx;
-
-    //         uint32 _lockedIndexId = tokenData.lockedIndexId;
-    //         uint256 _userUninvested = abi.decode(_cbdata, (uint256));
-
-    //         if (
-    //             SFHelper.HOST.decodeCtx(_newCtx).agreementSelector ==
-    //             IConstantFlowAgreementV1.createFlow.selector
-    //         ) {
-    //             uint32 _index = (_lockedIndexId ==
-    //                 tokenData.permDistIndex1.indexId)
-    //                 ? tokenData.permDistIndex2.indexId
-    //                 : tokenData.permDistIndex1.indexId;
-
-    //             if (
-    //                 _index == tokenData.permDistIndex1.indexId &&
-    //                 !tokenData.permDistIndex1.isActive
-    //             ) {
-    //                 tokenData.permDistIndex1.isActive = true;
-
-    //                 if (tokenData.permDistIndex1.lastDepositAt == 0) {
-    //                     tokenData.permDistIndex1.lastDepositAt = uint64(
-    //                         block.timestamp
-    //                     );
-    //                 }
-    //             } else if (
-    //                 _index == tokenData.permDistIndex2.indexId &&
-    //                 !tokenData.permDistIndex2.isActive
-    //             ) {
-    //                 tokenData.permDistIndex2.isActive = true;
-
-    //                 if (tokenData.permDistIndex2.lastDepositAt == 0) {
-    //                     tokenData.permDistIndex2.lastDepositAt = uint64(
-    //                         block.timestamp
-    //                     );
-    //                 }
-    //             }
-
-    //             tokenData.assignedIndex[_sender] = _index;
-
-    //             // console.log("Reached before transfer");
-
-    //             _transferBuffer(
-    //                 _superToken,
-    //                 _sender,
-    //                 (_index == tokenData.permDistIndex1.indexId)
-    //                     ? tokenData.permDistIndex1.lastDepositAt
-    //                     : tokenData.permDistIndex2.lastDepositAt,
-    //                 _userUninvested
-    //             );
-
-    //             // console.log("Reached after transfer");
-
-    //             // Assigning new units in the active index
-    //             _newCtx = _superToken.updateSharesInCallback(
-    //                 _DHPTx,
-    //                 _index,
-    //                 _newCtx
-    //             );
-    //         } else {
-    //             // If assigned index is currently locked then we will have to initiate index migration.
-    //             if (
-    //                 tokenData.distAmount != 0 &&
-    //                 tokenData.assignedIndex[_sender] == _lockedIndexId
-    //             ) {
-    //                 _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
-    //             }
-
-    //             if (
-    //                 SFHelper.HOST.decodeCtx(_newCtx).agreementSelector ==
-    //                 IConstantFlowAgreementV1.updateFlow.selector
-    //             ) {
-    //                 uint32 _currActiveIndex;
-
-    //                 if (tokenData.distAmount != 0) {
-    //                     _currActiveIndex = (_lockedIndexId ==
-    //                         tokenData.permDistIndex1.indexId)
-    //                         ? tokenData.permDistIndex2.indexId
-    //                         : tokenData.permDistIndex1.indexId;
-    //                 } else {
-    //                     _currActiveIndex = tokenData.assignedIndex[_sender];
-    //                 }
-
-    //                 // Modify user's index as the current index.
-    //                 if (tokenData.assignedIndex[_sender] != _currActiveIndex)
-    //                     tokenData.assignedIndex[_sender] = _currActiveIndex;
-
-    //                 _transferBuffer(
-    //                     _superToken,
-    //                     _sender,
-    //                     (_currActiveIndex == tokenData.permDistIndex1.indexId)
-    //                         ? tokenData.permDistIndex1.lastDepositAt
-    //                         : tokenData.permDistIndex2.lastDepositAt,
-    //                     _userUninvested
-    //                 );
-
-    //                 // Assigning new units in the active index.
-    //                 _newCtx = tokenData.superToken.updateSharesInCallback(
-    //                     _DHPTx,
-    //                     _currActiveIndex,
-    //                     _newCtx
-    //                 );
-    //             } else {
-    //                 // uint32 _index = tokenData.assignedIndex[_sender];
-
-    //                 if (tokenData.distAmount == 0) {
-    //                     (uint128 _totalUnits, uint128 _userUnits) = _getUnits(
-    //                         _DHPTx,
-    //                         tokenData.assignedIndex[_sender],
-    //                         _sender
-    //                     );
-
-    //                     if (_totalUnits == _userUnits) {
-    //                         (tokenData.assignedIndex[_sender] ==
-    //                             tokenData.permDistIndex1.indexId)
-    //                             ? tokenData.permDistIndex1.isActive = false
-    //                             : tokenData.permDistIndex2.isActive = false;
-    //                     }
-    //                 }
-
-    //                 delete tokenData.assignedIndex[_sender];
-
-    //                 /// @dev We can directly transfer the amount instead of using `_transferBuffer`.
-    //                 _transferBuffer(_superToken, _sender, 0, _userUninvested);
-    //             }
-    //         }
-    //     }
-    // }
-
     function afterAgreementCreated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _sender,
@@ -453,30 +287,6 @@ library dHedgeHelper {
                 ? tokenData.permDistIndex2.indexId
                 : tokenData.permDistIndex1.indexId;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
-
-            // if (
-            //     _index == tokenData.permDistIndex1.indexId &&
-            //     !tokenData.permDistIndex1.isActive
-            // ) {
-            //     tokenData.permDistIndex1.isActive = true;
-
-            //     if (tokenData.permDistIndex1.lastDepositAt == 0) {
-            //         tokenData.permDistIndex1.lastDepositAt = uint64(
-            //             block.timestamp
-            //         );
-            //     }
-            // } else if (
-            //     _index == tokenData.permDistIndex2.indexId &&
-            //     !tokenData.permDistIndex2.isActive
-            // ) {
-            //     tokenData.permDistIndex2.isActive = true;
-
-            //     if (tokenData.permDistIndex2.lastDepositAt == 0) {
-            //         tokenData.permDistIndex2.lastDepositAt = uint64(
-            //             block.timestamp
-            //         );
-            //     }
-            // }
 
             _initIndex(tokenData, _index);
 
@@ -548,30 +358,6 @@ library dHedgeHelper {
                 _currActiveIndex = tokenData.assignedIndex[_sender];
             }
 
-            // if (
-            //     _currActiveIndex == tokenData.permDistIndex1.indexId &&
-            //     !tokenData.permDistIndex1.isActive
-            // ) {
-            //     tokenData.permDistIndex1.isActive = true;
-
-            //     if (tokenData.permDistIndex1.lastDepositAt == 0) {
-            //         tokenData.permDistIndex1.lastDepositAt = uint64(
-            //             block.timestamp
-            //         );
-            //     }
-            // } else if (
-            //     _currActiveIndex == tokenData.permDistIndex2.indexId &&
-            //     !tokenData.permDistIndex2.isActive
-            // ) {
-            //     tokenData.permDistIndex2.isActive = true;
-
-            //     if (tokenData.permDistIndex2.lastDepositAt == 0) {
-            //         tokenData.permDistIndex2.lastDepositAt = uint64(
-            //             block.timestamp
-            //         );
-            //     }
-            // }
-
             _initIndex(tokenData, _currActiveIndex);
 
             // Modify user's index as the current index.
@@ -587,7 +373,7 @@ library dHedgeHelper {
                 _userUninvested
             );
 
-            console.log("Reached before updateSharesInCallback");
+            // console.log("Reached before updateSharesInCallback");
 
             // Assigning new units in the active index.
             _newCtx = _superToken.updateSharesInCallback(
@@ -596,7 +382,7 @@ library dHedgeHelper {
                 _newCtx
             );
 
-            console.log("End of afterAgreementUpdated");
+            // console.log("End of afterAgreementUpdated");
         }
     }
 
@@ -631,9 +417,7 @@ library dHedgeHelper {
                 tokenData.assignedIndex[_sender] == tokenData.lockedIndexId
             ) {
                 _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
-            }
-
-            if (tokenData.distAmount == 0) {
+            } else {
                 (uint128 _totalUnits, uint128 _userUnits) = _getUnits(
                     _DHPTx,
                     tokenData.assignedIndex[_sender],
@@ -798,7 +582,7 @@ library dHedgeHelper {
         if (_depositAmount > _userUninvested) {
             uint256 _amount = _depositAmount - _userUninvested;
 
-            console.log("Amount to be transferred from: ", _amount);
+            // console.log("Amount to be transferred from: ", _amount);
 
             _success = _superToken.transferFrom(
                 _sender,
@@ -810,7 +594,7 @@ library dHedgeHelper {
         } else if (_depositAmount < _userUninvested) {
             uint256 _amount = _userUninvested - _depositAmount;
 
-            console.log("Amount to be transferred to: ", _amount);
+            // console.log("Amount to be transferred to: ", _amount);
 
             _success = _superToken.transfer(_sender, _amount);
 
@@ -851,16 +635,17 @@ library dHedgeHelper {
                 );
             }
 
-            // console.log(
-            //     "Token: %s; amount: %s",
-            //     _depositToken,
-            //     _depositBalance
-            // );
-
             // Deposit the tokens into the dHedge pool
             uint256 _liquidityMinted = _poolLogic.deposit(
                 _depositToken,
                 _depositBalance
+            );
+
+            console.log(
+                "Token: %s; Amount: %s, DHPT: %s",
+                _depositToken,
+                _depositBalance,
+                _liquidityMinted
             );
 
             // Note the amount to be distributed.
@@ -880,7 +665,7 @@ library dHedgeHelper {
         address _sender,
         bytes memory _ctx
     ) private returns (bytes memory _newCtx) {
-        console.log("Index migration begun");
+        // console.log("Index migration begun");
 
         _newCtx = _ctx;
         uint32 _lockedIndexId = _tokenData.lockedIndexId;
@@ -900,11 +685,19 @@ library dHedgeHelper {
             _sender
         );
 
+        uint256 _tempDistAmount = _tokenData.tempDistAmount;
+
         // Calculating a user's pending locked tokens amount by using units issued to the user,
         // total units issued and total amount of DHPT in this contract (this is the locked amount)
-        _tokenData.tempDistAmount +=
-            (_userUnits * _tokenData.distAmount) /
-            _totalUnits;
+        _tempDistAmount += ((_userUnits * (_tokenData.distAmount - _tempDistAmount)) /
+            _totalUnits);
+
+        _tokenData.tempDistAmount = _tempDistAmount;
+
+        console.log(
+            "Temp dist amount in migration: %s",
+            _tokenData.tempDistAmount
+        );
 
         // Check if the total units of the locked index is equal to only the user's units.
         // We will have to make this index inactive if the condition is true.
@@ -918,7 +711,7 @@ library dHedgeHelper {
         // Deleting units of the user in locked index
         _newCtx = _DHPTx.deleteSubscriptionInCallback(_lockedIndexId, _newCtx);
 
-        console.log("Subscription deleted %s", _lockedIndexId);
+        console.log("Subscription deleted from index: %s", _lockedIndexId);
 
         // Assigning units in temporary index
         _newCtx = _DHPTx.updateSharesInCallback(
@@ -927,7 +720,7 @@ library dHedgeHelper {
             _newCtx
         );
 
-        console.log("Reached after share update");
+        // console.log("Reached after share update");
     }
 
     function _initIndex(
@@ -991,13 +784,14 @@ library dHedgeHelper {
     ) private {
         uint256 _totalDistAmount = _tokenData.distAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
-        uint256 _actualPermDistAmount = _totalDistAmount - _tempDistAmount;
 
-        // console.log(
-        //     "Distribution amount: %s, DHPTx balance: %s",
-        //     _permDistAmount,
-        //     _DHPTx.balanceOf(address(this))
-        // );
+        console.log(
+            "Dist amount: %s, Temp amount: %s",
+            _totalDistAmount,
+            _tempDistAmount
+        );
+
+        uint256 _actualPermDistAmount = _totalDistAmount - _tempDistAmount;
 
         if (_totalDistAmount != 0) {
             _tokenData.distAmount = 0;
@@ -1034,6 +828,8 @@ library dHedgeHelper {
         _tokenData.tempDistIndex = _latestDistIndex;
 
         ++_dHedgePool.latestDistIndex;
+
+        console.log("Created new temp index: %s", _latestDistIndex);
     }
 
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {

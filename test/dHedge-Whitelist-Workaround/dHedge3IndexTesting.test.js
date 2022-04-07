@@ -423,6 +423,8 @@ describe("3-Index Approach Testing", function () {
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
     await sf.cfaV1
@@ -430,6 +432,22 @@ describe("3-Index Approach Testing", function () {
         superToken: USDC.superToken,
         receiver: app.address,
         flowRate: userFlowRate,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObj[1],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObj[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
       })
       .exec(USDCWhale);
 
@@ -503,7 +521,7 @@ describe("3-Index Approach Testing", function () {
    * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
    * - They should ideally match.
    */
-  it.only("Should distribute DHPTx correctly (single user multi token with distributions triggered)", async () => {
+  it("Should distribute DHPTx correctly (single user multi token with distributions triggered)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -678,16 +696,6 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    // await app.distribute(USDC.token);
-    // await app.distribute(DAI.token);
-
-    // expect(
-    //   await DHPTx.balanceOf({
-    //     account: admin.address,
-    //     providerOrSigner: ethersProvider,
-    //   })
-    // ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
-
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
     tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
 
@@ -695,8 +703,6 @@ describe("3-Index Approach Testing", function () {
     expect(tokenDistIndexObjDAI[3]).to.equal(4);
 
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
-
-    console.log("Reached before update");
 
     await sf.cfaV1
       .updateFlow({
@@ -749,20 +755,16 @@ describe("3-Index Approach Testing", function () {
       })
       .exec(admin);
 
-    console.log("Reached after update");
-
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.token);
     await app.dHedgeDeposit(DAI.token);
 
-    // console.log(
-    //   "DHPTx balance of user: ",
-    //   await DHPTx.balanceOf({
-    //     account: admin.address,
-    //     providerOrSigner: ethersProvider,
-    //   })
-    // );
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+
+    expect(tokenDistIndexObjUSDC[3]).to.equal(2);
+    expect(tokenDistIndexObjDAI[3]).to.equal(5);
 
     expect(
       await DHPTx.balanceOf({
@@ -775,20 +777,14 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    // await app.distribute(USDC.token);
-    // await app.distribute(DAI.token);
-
-    // expect(
-    //   await DHPTx.balanceOf({
-    //     account: admin.address,
-    //     providerOrSigner: ethersProvider,
-    //   })
-    // ).to.be.closeTo(DHPTBalance2.add(DHPTBalance1), parseUnits("0.001", 18));
-
-    await increaseTime(getSeconds(1));
-
     await app.dHedgeDeposit(USDC.token);
     await app.dHedgeDeposit(DAI.token);
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+
+    expect(tokenDistIndexObjUSDC[3]).to.equal(2);
+    expect(tokenDistIndexObjDAI[3]).to.equal(5);
 
     expect(
       await DHPTx.balanceOf({
@@ -864,7 +860,7 @@ describe("3-Index Approach Testing", function () {
     );
   });
 
-  it("should be able to distribute a user's share correctly (multi-user-single-token)", async () => {
+  it("should be able to distribute a user's share correctly (multi user single token triggered distributions)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -928,30 +924,6 @@ describe("3-Index Approach Testing", function () {
       })
       .exec(admin);
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-
-    await sf.idaV1
-      .approveSubscription({
-        indexId:
-          tokenDistIndexObjUSDC[0] === tokenDistIndexObjUSDC[3]
-            ? tokenDistIndexObjUSDC[1]
-            : tokenDistIndexObjUSDC[0],
-        superToken: DHPTx.address,
-        publisher: app.address,
-      })
-      .exec(USDCWhale);
-
-    await sf.idaV1
-      .approveSubscription({
-        indexId:
-          tokenDistIndexObjUSDC[0] === tokenDistIndexObjUSDC[3]
-            ? tokenDistIndexObjUSDC[1]
-            : tokenDistIndexObjUSDC[0],
-        superToken: DHPTx.address,
-        publisher: app.address,
-      })
-      .exec(admin);
-
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDCContract.address);
@@ -991,7 +963,7 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await app.dHedgeDeposit(USDC.token);
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
@@ -1029,6 +1001,8 @@ describe("3-Index Approach Testing", function () {
       })
       .exec(admin);
 
+    await increaseTime(getSeconds(1));
+
     await app.distribute(USDC.token);
 
     expect(
@@ -1062,7 +1036,7 @@ describe("3-Index Approach Testing", function () {
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
-  it("should calculate fees correctly", async () => {
+  it.skip("should calculate fees correctly", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
