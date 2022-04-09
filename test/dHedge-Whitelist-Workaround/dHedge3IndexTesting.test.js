@@ -45,9 +45,6 @@ describe("3-Index Approach Testing", function () {
   // Supports DAI and USDC
   const Pool1 = "0xbae28251b2a4e621aa7e20538c06dee010bc06de";
 
-  // SNX Debt Mirror (https://app.dhedge.org/pool/0x65bb99e80a863e0e27ee6d09c794ed8c0be47186)
-  // Supports USDC only
-
   const [admin, DAO] = provider.getWallets();
   const ethersProvider = provider;
 
@@ -56,7 +53,7 @@ describe("3-Index Approach Testing", function () {
   let DAIContract, USDCContract, DHPT;
   let USDCx, DAIx, DHPTx;
   let dHedgeHelper, dHedgeStorage, SFHelper;
-  let app;
+  let app, poolManager;
 
   before(async () => {
     [USDCWhale, DAIWhale, DAIWhale2, dHEDGEOwner] = await impersonateAccounts([
@@ -113,6 +110,22 @@ describe("3-Index Approach Testing", function () {
     await AssetHandlerContract.connect(dHEDGEOwner).setChainlinkTimeout(
       getSeconds(500).toString()
     );
+
+    // PoolLogicABI = [
+    //   "function manager() internal view returns (address)",
+    //   "function poolManagerLogic() public view returns (address)",
+    // ];
+    // PoolLogicContract = await ethers.getContractAt(PoolLogicABI, Pool1);
+    // poolManagerLogic = await PoolLogicContract.poolManagerLogic();
+
+    // PoolManagerLogicABI = [
+    //   "function changeAssets(Asset[] calldata, address[] calldata) external",
+    // ];
+
+    // poolManager = await ethers.getContractAt(
+    //   PoolManagerLogicABI,
+    //   poolManagerLogic
+    // );
 
     PoolFactoryContract = await ethers.getContractAt(
       JSON.parse(dHEDGEPoolFactory.result),
@@ -390,7 +403,7 @@ describe("3-Index Approach Testing", function () {
    * @dev This test requires manual verification. Check for the DHP tokens minted and distributed.
    * - They should ideally match.
    */
-  it("Should distribute DHPTx correctly (single-token)", async () => {
+  it("Should distribute DHPTx correctly (single token with distributions triggered)", async () => {
     await loadFixture(setupEnv);
 
     console.log("\n--Manual verification required for this test--\n");
@@ -499,6 +512,107 @@ describe("3-Index Approach Testing", function () {
       DHPTBalance3.add(DHPTBalance2.add(DHPTBalance1)),
       parseUnits("0.001", 18)
     );
+
+    // Ideally, no DHP tokens should be left in the contract
+    // although some amount can be left due to rounding errors.
+    expect(
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(constants.Zero, parseUnits("0.001", 18));
+
+    expect(await DHPT.balanceOf(app.address)).to.be.closeTo(
+      constants.Zero,
+      parseUnits("0.001", 18)
+    );
+  });
+
+  it("Should distribute DHPTx correctly (single token without distributions triggered)", async () => {
+    await loadFixture(setupEnv);
+
+    console.log("\n--Manual verification required for this test--\n");
+
+    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+
+    // The user will now be assigned index 1
+    await startAndSub(USDCWhale, USDC, userFlowRate);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDCContract.address);
+
+    DHPTBalance1 = await DHPT.balanceOf(app.address);
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
+    await sf.cfaV1
+      .updateFlow({
+        superToken: USDC.superToken,
+        receiver: app.address,
+        flowRate: userFlowRate,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObj[1],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObj[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDC.token);
+
+    DHPTBalance2 = await DHPT.balanceOf(app.address);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: USDCWhaleAddr,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: USDCWhaleAddr,
+        receiver: app.address,
+      })
+      .exec(USDCWhale);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObj[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(USDCWhale);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
+
+    expect(
+      await DHPTx.balanceOf({
+        account: USDCWhaleAddr,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(DHPTBalance2.add(DHPTBalance1), parseUnits("0.001", 18));
 
     // Ideally, no DHP tokens should be left in the contract
     // although some amount can be left due to rounding errors.
@@ -1036,7 +1150,73 @@ describe("3-Index Approach Testing", function () {
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
-  it.skip("should calculate fees correctly", async () => {
+  it.only("should be able to distribute a user's share correctly (after inactivity)", async () => {
+    await loadFixture(setupEnv);
+
+    userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
+
+    await startAndSub(admin, USDC, userFlowRate);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDC.token);
+
+    DHPTBalance1 = await DHPT.balanceOf(app.address);
+
+    console.log("DHPT balance in contract: ", DHPTBalance1.toString());
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: admin.address,
+        receiver: app.address,
+      })
+      .exec(admin);
+
+    await sf.idaV1
+      .approveSubscription({
+        indexId: tokenDistIndexObjUSDC[2],
+        superToken: DHPTx.address,
+        publisher: app.address,
+      })
+      .exec(admin);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: admin.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
+
+    await increaseTime(getSeconds(1));
+
+    await startAndSub(admin, USDC, userFlowRate);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDC.token);
+
+    DHPTBalance2 = await DHPT.balanceOf(app.address);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    expect(
+      await DHPTx.balanceOf({
+        account: admin.address,
+        providerOrSigner: ethersProvider,
+      })
+    ).to.be.closeTo(DHPTBalance2.add(DHPTBalance1), parseUnits("0.001", 18));
+  });
+
+  it("should calculate fees correctly", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));

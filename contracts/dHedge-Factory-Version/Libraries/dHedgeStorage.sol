@@ -20,11 +20,6 @@ library dHedgeStorage {
         uint32 indexId;
     }
 
-    // struct TempIndexData {
-    //     uint256 pendingAmount;
-    //     uint32 indexId;
-    // }
-
     /**
      * @param superToken Contains supported supertoken of an underlying token.
      * @param permDistIndex Primary/Permanent IDA distribution index with respect to an underlying token.

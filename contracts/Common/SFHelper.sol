@@ -38,10 +38,10 @@ library SFHelper {
         uint256 _amount
     ) external returns (bytes memory _newCtx) {
         console.log(
-            "Amount to distribute: %s, Index: %s",
+            "Amount to distribute: %s, Index: %s, DHPTx: %s",
             _amount,
             _index,
-            address(this)
+            _superToken.balanceOf(address(this))
         );
         (uint256 _actualAmount, ) = IDA_V1.calculateDistribution(
             _superToken,

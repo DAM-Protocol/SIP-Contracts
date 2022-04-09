@@ -50,7 +50,6 @@ library dHedgeHelper {
         uint256 amount
     );
 
-    /// @dev Do we need to change lockActive status ?
     function initStreamToken(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         ISuperToken _superToken
@@ -73,7 +72,6 @@ library dHedgeHelper {
         );
 
         // Create 2 permanent indices in accordance with `3-index` approach
-
         uint32 _latestDistIndex = _dHedgePool.latestDistIndex;
         tokenData.permDistIndex1.indexId = _latestDistIndex;
         tokenData.permDistIndex2.indexId = _latestDistIndex + 1;
@@ -143,7 +141,6 @@ library dHedgeHelper {
         IPoolManagerLogic _supportLogic = IPoolManagerLogic(
             _poolLogic.poolManagerLogic()
         );
-
         ISuperToken _superToken = tokenData.superToken;
         ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
@@ -242,13 +239,14 @@ library dHedgeHelper {
         ];
         ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
-        require(
-            tokenData.distAmount != 0,
-            "dHedgeHelper: No amount to distribute"
-        );
 
         // Upgrade the DHPT in the contract.
         _upgradeDHPTx(IPoolLogic(_dHedgePool.poolLogic), _DHPTx);
+        
+        require(
+            tokenData.distAmount != 0 && _DHPTx.balanceOf(address(this)) != 0,
+            "dHedgeHelper: No amount to distribute"
+        );
 
         _distribute(
             _dHedgePool,
@@ -425,10 +423,16 @@ library dHedgeHelper {
                 );
 
                 if (_totalUnits == _userUnits) {
-                    (tokenData.assignedIndex[_sender] ==
-                        tokenData.permDistIndex1.indexId)
-                        ? tokenData.permDistIndex1.isActive = false
-                        : tokenData.permDistIndex2.isActive = false;
+                    if (
+                        tokenData.assignedIndex[_sender] ==
+                        tokenData.permDistIndex1.indexId
+                    ) {
+                        tokenData.permDistIndex1.isActive = false;
+                        delete tokenData.permDistIndex1.lastDepositAt;
+                    } else {
+                        tokenData.permDistIndex2.isActive = false;
+                        delete tokenData.permDistIndex2.lastDepositAt;
+                    }
                 }
             }
 
@@ -670,11 +674,6 @@ library dHedgeHelper {
         _newCtx = _ctx;
         uint32 _lockedIndexId = _tokenData.lockedIndexId;
 
-        // console.log(
-        //     "Assigned index of %s: %s",
-        //     _sender,
-        //     _tokenData.assignedIndex[_sender]
-        // );
 
         // Index migration is done by deleting a sender's subscription in the locked index
         // and assigning new units in the active index along with assigning new units in temporary
@@ -689,8 +688,8 @@ library dHedgeHelper {
 
         // Calculating a user's pending locked tokens amount by using units issued to the user,
         // total units issued and total amount of DHPT in this contract (this is the locked amount)
-        _tempDistAmount += ((_userUnits * (_tokenData.distAmount - _tempDistAmount)) /
-            _totalUnits);
+        _tempDistAmount += ((_userUnits *
+            (_tokenData.distAmount - _tempDistAmount)) / _totalUnits);
 
         _tokenData.tempDistAmount = _tempDistAmount;
 
@@ -703,9 +702,13 @@ library dHedgeHelper {
         // We will have to make this index inactive if the condition is true.
         /// @dev We may have to make the `lastDepositAt` for the inactive index 0 as well.
         if (_totalUnits == _userUnits) {
-            (_lockedIndexId == _tokenData.permDistIndex1.indexId)
-                ? _tokenData.permDistIndex1.isActive = false
-                : _tokenData.permDistIndex2.isActive = false;
+            if (_lockedIndexId == _tokenData.permDistIndex1.indexId) {
+                _tokenData.permDistIndex1.isActive = false;
+                delete _tokenData.permDistIndex1.lastDepositAt;
+            } else {
+                _tokenData.permDistIndex2.isActive = false;
+                delete _tokenData.permDistIndex2.lastDepositAt;
+            }
         }
 
         // Deleting units of the user in locked index
@@ -833,12 +836,14 @@ library dHedgeHelper {
     }
 
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
+        uint256 _superTokenBalance = IERC20Mod(address(_poolLogic)).balanceOf(address(this));
+
         if (
             _poolLogic.getExitRemainingCooldown(address(this)) == 0 &&
-            IERC20Mod(address(_poolLogic)).balanceOf(address(this)) > 0
+            _superTokenBalance > 0
         ) {
             _DHPTx.upgrade(
-                IERC20Mod(address(_poolLogic)).balanceOf(address(this))
+                _superTokenBalance
             );
         }
     }
