@@ -58,6 +58,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
     function initStreamToken(ISuperToken _superToken) external {
         _onlyActive();
+        _onlyOwner(msg.sender);
         poolData.initStreamToken(_superToken);
     }
 
@@ -226,7 +227,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     /**************************************************************************
      * SuperApp callbacks
      *************************************************************************/
-    /// @dev Maybe use `_beforeAgreement` hook here ?
     function beforeAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
@@ -251,7 +251,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         _cbdata = abi.encode(0);
     }
 
-    /// @dev Maybe use `_afterAgreement` hook here ?
     function afterAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
