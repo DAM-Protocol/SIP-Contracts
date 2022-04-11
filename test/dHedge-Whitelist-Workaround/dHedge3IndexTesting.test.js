@@ -1150,7 +1150,7 @@ describe("3-Index Approach Testing", function () {
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
-  it.only("should be able to distribute a user's share correctly (after inactivity)", async () => {
+  it("should be able to distribute a user's share correctly (after inactivity)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
