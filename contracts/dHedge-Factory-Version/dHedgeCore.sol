@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
 
 import { ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
@@ -16,11 +16,12 @@ import "./Interfaces/IdHedgeCoreFactory.sol";
 import "hardhat/console.sol";
 
 /**
- * @title Core contract for streaming into a dHedge pool
- * @author rashtrakoff <rashtrakoff@pm.me>
- * @notice Contains user facing functions
+ * @title Core contract for streaming into a dHedge pool.
+ * @author rashtrakoff <rashtrakoff@pm.me>.
+ * @notice Contains user facing functions.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
+
 // solhint-disable not-rely-on-time
 // solhint-disable reason-string
 // solhint-disable var-name-mixedcase
@@ -30,11 +31,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
 
-    // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves
+    // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves.
     dHedgeStorage.dHedgePool private poolData;
 
-    /// @dev Initialize the factory
-    /// @param _dHedgePool dHEDGE pool contract address
+    /// @dev Initialize the factory.
+    /// @param _dHedgePool dHEDGE pool contract address.
     /// @param _DHPTx Supertoken corresponding to the DHPT of the pool
     function initialize(address _dHedgePool, ISuperToken _DHPTx)
         external
@@ -56,38 +57,43 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
      * Core functions
      *************************************************************************/
 
+    /// Initialises an underlying token and it's supertoken for streaming into dHEDGE pool.
+    /// @param _superToken Supertoken of the underlying token we wish to stream.
     function initStreamToken(ISuperToken _superToken) external {
         _onlyActive();
         _onlyOwner(msg.sender);
         poolData.initStreamToken(_superToken);
     }
 
-    /// @notice Converts supertokens to underlying tokens and deposits them into dHedge pool
-    /// @param _token Address of the underlying token to be deposited into dHedge pool
+    /// Converts supertokens to underlying tokens and deposits them into dHedge pool.
+    /// @param _token Address of the underlying token to be deposited into dHedge pool.
     function dHedgeDeposit(address _token) external override {
         _onlyActive();
         poolData.deposit(_token);
     }
 
+    /// Distributes the DHPTx corresponding to a underlying token's deposits.
+    /// @param _token Address of the underlying token.
     function distribute(address _token) external {
         _onlyActive();
         poolData.distribute(_token);
     }
 
-    /// @dev Function to withdraw a token in case of emergency
-    /// @param _token Address of the pool token
-    /// @custom:note Remove/Modify this function after testing
+    /// Function to withdraw a token in case of emergency.
+    /// @param _token Address of the pool token.
+    /// TODO Remove/Modify this function after testing
     function emergencyWithdraw(address _token) external {
         _onlyOwner(msg.sender);
         IERC20(_token).safeTransfer(
-            IdHedgeCoreFactory(poolData.factory).dao(),
+            IdHedgeCoreFactory(poolData.factory).multiSig(),
             IERC20(_token).balanceOf(address(this))
         );
 
         emit EmergencyWithdraw(_token);
     }
 
-    /// @dev Deactivates a dHedgeCore contract
+    /// Deactivates a dHedgeCore contract.
+    /// @param _message Message reason for reactivation of the core.
     function deactivateCore(string calldata _message) external {
         _onlyOwner(msg.sender);
         _onlyActive();
@@ -97,7 +103,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         emit CoreDeactivated(_message);
     }
 
-    /// @dev Reactivates a dHedgeCore contract
+    /// Reactivates a dHedgeCore contract.
+    /// @param _message Message reason for reactivation of the core.
     function reactivateCore(string calldata _message) external {
         _onlyOwner(msg.sender);
         require(!poolData.isActive, "dHedgeCore: Pool already active");
@@ -107,11 +114,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         emit CoreReactivated(_message);
     }
 
-    /// @notice Closes a supertoken stream if core is jailed or user is running low on balance
-    /// @param _superToken Supertoken being streamed
-    /// @param _user Address of the user whose stream needs to be closed
-    /// @dev Any user's stream can be closed by anyone provided the app is jailed
-    /// or user doesn't have enough amount to stream for more than 12 hours
+    /// Closes a supertoken stream if core is jailed or user is running low on balance.
+    /// Any user's stream can be closed by anyone provided the app is jailed-
+    /// or user doesn't have enough amount to stream for more than 12 hours.
+    /// @param _superToken Supertoken being streamed.
+    /// @param _user Address of the user whose stream needs to be closed.
     function emergencyCloseStream(ISuperToken _superToken, address _user)
         external
         override
@@ -119,24 +126,25 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         _superToken.emergencyCloseStream(_user);
     }
 
-    /// @notice Checks if the core is active or not
-    /// @return Boolean indicating working status of core
+    /// Checks if the core is active or not.
+    /// @return Boolean indicating working status of core.
     function checkCoreActive() external view override returns (bool) {
         return poolData.isActive;
     }
 
-    /// @dev Gets the latest distribution index created
-    /// @return Number corresponding to the latest created index
-    /// This function can also be used to get number of tokens supported by this dHedgeCore
-    function getLatestDistIndex() external view override returns (uint32) {
-        return poolData.latestDistIndex;
-    }
+    // /// Gets the latest distribution index created.
+    // /// This function can also be used to get number of tokens supported by this dHedgeCore.
+    // /// @return Number corresponding to the latest created index.
+    // function getLatestDistIndex() external view override returns (uint32) {
+    //     return poolData.latestDistIndex;
+    // }
 
-    /// @dev Gets the distribution indices corresponding to an underlying token.
+    /// Gets the distribution indices corresponding to an underlying token.
     /// @param _token Address of a deposit token.
     /// @return Index ID of first permanent index.
     /// @return Index ID of second permanent index.
     /// @return Index ID of temporary index.
+    /// @return Index ID of the locked index.
     function getTokenDistIndices(address _token)
         external
         view
@@ -159,7 +167,11 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
         return (0, 0, 0, 0);
     }
-
+    
+    /// Gets a user's assigned permanent distribution index for a supertoken stream.
+    /// @param _user Address of the user.
+    /// @param _token Address of the underlying token for which the permanent distribution index ID is required.
+    /// @return Assigned permanent distribution index ID.
     function getUserDistIndex(address _user, address _token)
         external
         view
@@ -168,10 +180,10 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.tokenData[_token].assignedIndex[_user];
     }
 
-    /// @notice Calculates uninvested token amount of a particular user
-    /// @param _user Address of the user whose uninvested amount needs to be calculated
-    /// @param _token Address of the underlying token
-    /// @return Amount of uninvested tokens
+    /// Calculates uninvested token amount of a particular user.
+    /// @param _user Address of the user whose uninvested amount needs to be calculated.
+    /// @param _token Address of the underlying token.
+    /// @return Amount of uninvested tokens.
     function calcUserUninvested(address _user, address _token)
         public
         view
@@ -181,19 +193,20 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.calcUserUninvested(_user, _token);
     }
 
-    /// @dev Checks if deposit action can be performed
-    /// @return Boolean indicating if upkeep/deposit can be performed
-    /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool
+    /// Checks if deposit action can be performed.
+    /// @return Boolean indicating if upkeep/deposit can be performed.
+    /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool.
     function requireUpkeep() public view override returns (bool, address) {
         return poolData.requireUpkeep();
     }
 
-    /// @dev Checks status of the core and reverts if inactive
+    /// Checks status of the core and reverts if inactive.
     function _onlyActive() internal view {
         require(poolData.isActive, "dHedgeCore: Pool inactive");
     }
 
-    /// @dev Equivalent to onlyOwner modifier
+    /// Equivalent to onlyOwner modifier.
+    /// @param _user Address of the user claiming to be the owner.
     function _onlyOwner(address _user) internal view {
         require(
             _user == Ownable(poolData.factory).owner(),
@@ -201,7 +214,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         );
     }
 
-    /// @dev Checks if the caller is the SF host contract
+    /// Checks if the caller is the SF host contract.
     function _onlyHost() internal view {
         require(
             msg.sender == address(SFHelper.HOST),
@@ -209,7 +222,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         );
     }
 
-    /// @dev Checks if the agreement is of type CFA or IDA
+    /// Checks if the agreement is of type CFA or IDA.
     function _onlyExpected(address _agreementClass) internal view {
         require(
             ISuperAgreement(_agreementClass).agreementType() ==

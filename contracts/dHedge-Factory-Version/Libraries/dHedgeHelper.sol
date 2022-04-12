@@ -1,29 +1,21 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
 
 import { IPoolLogic, IPoolManagerLogic } from "../Interfaces/IdHedge.sol";
 import { IdHedgeCoreFactory } from "../Interfaces/IdHedgeCoreFactory.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
+
+import {IERC20Mod} from "../../Common/IERC20Mod.sol";
 import "hardhat/console.sol";
 
-// Note: Required to check if distribution indices indeed exist or not when making deposits or distributions.
 
 /**
- * @title Modified IERC20 interface
- * @dev This interface is used to access decimals of an ERC20 token
- */
-interface IERC20Mod is IERC20 {
-    function decimals() external view returns (uint8);
-}
-
-/**
- * @title dHedge helper library
- * @author rashtrakoff <rashtrakoff@pm.me>
- * @dev Contains functions for interacting with dHedge protocol pools
+ * @title dHedge helper library.
+ * @author rashtrakoff <rashtrakoff@pm.me>.
+ * @dev Contains functions for interacting with dHEDGE protocol pools.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 
@@ -695,11 +687,11 @@ library dHedgeHelper {
 
         // Perform deposit transaction iff amount of underlying tokens is greater than 0.
         if (_depositBalance > 0) {
-            // Transfer the fees collected to the owner only if it's greater than 0.
+            // Transfer the fees collected for the owner only if it's greater than 0.
             // This condition won't be satisfied in case `defaultFeeRate` is set as 0.
             if (_feeCollected > 0) {
                 IERC20(_depositToken).safeTransfer(
-                    IdHedgeCoreFactory(_factory).dao(),
+                    IdHedgeCoreFactory(_factory).multiSig(),
                     _feeCollected
                 );
             }

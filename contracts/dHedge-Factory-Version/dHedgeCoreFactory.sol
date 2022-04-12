@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
 
 import "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperApp.sol";
@@ -21,7 +21,7 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     address public implementation;
 
     /// @notice The DAO which receives fees
-    address public override dao;
+    address public override multiSig;
 
     /// @notice Fee rate for collecting streaming fees scaled to 1e6
     uint32 public override defaultFeeRate;
@@ -32,10 +32,10 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     /// @notice Mapping containing core address for every dHEDGE pool if deployed/created
     mapping(address => address) public cores;
 
-    constructor(address _dao, uint32 _defaultFeeRate) {
+    constructor(address _multiSig, uint32 _defaultFeeRate) {
         implementation = address(new dHedgeCore());
+        multiSig = _multiSig;
         defaultFeeRate = _defaultFeeRate;
-        dao = _dao;
     }
 
     /// @dev Sets a new implementation of core contract
@@ -57,12 +57,12 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
         emit FeeRateChanged(_defaultFeeRate);
     }
 
-    /// @dev Sets DAO address for all cores
-    /// @param _dao New address for the DAO
-    function setDAOAddress(address _dao) external onlyOwner {
-        dao = _dao;
+    /// @dev Sets multisig address for all cores
+    /// @param _multiSig New address for the DAO
+    function setMultiSigAddress(address _multiSig) external onlyOwner {
+        multiSig = _multiSig;
 
-        emit DAOAddressChanged(_dao);
+        emit MultiSigAddressChanged(_multiSig);
     }
 
     /// @notice Creates a new core for a given dHEDGE pool

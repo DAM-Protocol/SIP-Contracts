@@ -7,9 +7,9 @@ import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-co
 import "hardhat/console.sol";
 
 /**
- * @title Superfluid helper library
- * @author rashtrakoff <rashtrakoff@pm.me>
- * @dev Contains functions which help in interacting with Superfluid contracts
+ * @title Superfluid helper library.
+ * @author rashtrakoff <rashtrakoff@pm.me>.
+ * @dev Contains functions which help in interacting with Superfluid contracts.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
  */
 // solhint-disable not-rely-on-time
@@ -26,12 +26,10 @@ library SFHelper {
             0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
         );
 
-    /**
-     * @dev Function to distribute a supertoken amount according to an index
-     * @param _superToken The supertoken to be distributed
-     * @param _index Index containing share details
-     * @param _amount Amount of `_supertoken` to be distributed
-     */
+    /// Function to distribute a supertoken amount according to an index.
+    /// @param _superToken The supertoken to be distributed.
+    /// @param _index Index containing share details.
+    /// @param _amount Amount of `_supertoken` to be distributed.
     function distribute(
         ISuperToken _superToken,
         uint32 _index,
@@ -67,11 +65,10 @@ library SFHelper {
         console.log("Actual amount distributed: %s", _actualAmount);
     }
 
-    /**
-     * @dev Function to create a distribution index
-     * @param _superToken The supertoken to be distributed
-     * @param _index New index value containing share details
-     */
+    
+    /// Function to create a distribution index.
+    /// @param _superToken The supertoken to be distributed.
+    /// @param _index New index value containing share details.
     function createIndex(ISuperToken _superToken, uint32 _index)
         external
         returns (bytes memory _newCtx)
@@ -90,11 +87,10 @@ library SFHelper {
         emit NewSupertokenAdded(address(_superToken), _index);
     }
 
-    /**
-     * @dev Function to create a distribution index
-     * @param _superToken The supertoken to be distributed
-     * @param _index New index value containing share details
-     */
+    
+    /// Function to create a distribution index.
+    /// @param _superToken The supertoken to be distributed.
+    /// @param _index New index value containing share details.
     function createIndexInCallback(
         ISuperToken _superToken,
         uint32 _index,
@@ -115,13 +111,12 @@ library SFHelper {
         emit NewTemporaryIndexCreated(address(_superToken), _index);
     }
 
-    /**
-     * @dev Function to update shares of a user
-     * @param _superStreamToken The supertoken that the user is streaming
-     * @param _superDistToken The supertoken that's distributed in index with value `_index`
-     * @param _index Index containing share details
-     * @param _ctx Superfluid context object
-     */
+    
+    /// @dev Function to update shares of a user.
+    /// @param _superStreamToken The supertoken that the user is streaming.
+    /// @param _superDistToken The supertoken that's distributed in index with value `_index`.
+    /// @param _index Index containing share details.
+    /// @param _ctx Superfluid context object.
     function updateSharesInCallback(
         ISuperToken _superStreamToken,
         ISuperToken _superDistToken,
@@ -147,7 +142,11 @@ library SFHelper {
         );
     }
 
-    /// @dev To be used when assigning shares in a temporary index
+    /// To be used when assigning shares in a temporary index.
+    /// @param _superDistToken Distribution supertoken.
+    /// @param _index Index ID in which shares need to be updated.
+    /// @param _units Number of units to be assigned.
+    /// @param _ctx Superfluid context object.
     function updateSharesInCallback(
         ISuperToken _superDistToken,
         uint32 _index,
@@ -193,12 +192,11 @@ library SFHelper {
         );
     }
 
-    /**
-     * @dev Function to close a stream
-     * @dev This function should be called provided the app is jailed or user is running low on supertokens
-     * @param _superToken The supertoken that the user is streaming
-     * @param _user Address of the user
-     */
+    
+    /// Function to close a stream.
+    /// @dev This function should be called provided the app is jailed or user is running low on supertokens.
+    /// @param _superToken The supertoken that the user is streaming
+    /// @param _user Address of the user
     function emergencyCloseStream(ISuperToken _superToken, address _user)
         external
     {
@@ -235,6 +233,9 @@ library SFHelper {
         } else revert("SFHelper: No emergency close");
     }
 
+    /// Function to get an index's details.
+    /// @param _superToken Supertoken of the corresponding index.
+    /// @param _indexId ID of the index whose details we require.
     function getIndex(ISuperToken _superToken, uint32 _indexId)
         external
         view
@@ -248,6 +249,10 @@ library SFHelper {
         return IDA_V1.getIndex(_superToken, address(this), _indexId);
     }
 
+    /// Function to get details of a user's subscription (IDA subscription).
+    /// @param _superToken Supertoken of the corresponding index.
+    /// @param _index ID of the index in which the user's subscription is present.
+    /// @param _user Address of the user whose subscription details we need.
     function getSubscription(
         ISuperToken _superToken,
         uint32 _index,
@@ -266,13 +271,12 @@ library SFHelper {
             IDA_V1.getSubscription(_superToken, address(this), _index, _user);
     }
 
-    /**
-     * @dev Calculates uninvested amount of a user
-     * @param _superToken Token being streamed
-     * @param _user Address of the user
-     * @param _lastDepositAt Last time a token was deposited to a dHEDGE pool
-     * @return _userUninvested User's uninvested amount
-     */
+    
+    /// Calculates uninvested amount of a user.
+    /// @param _superToken Token being streamed.
+    /// @param _user Address of the user.
+    /// @param _lastDepositAt Last time a token was deposited to a dHEDGE pool.
+    /// @return _userUninvested User's uninvested amount.
     function calcUserUninvested(
         ISuperToken _superToken,
         address _user,
@@ -288,13 +292,12 @@ library SFHelper {
         return _userFlowRate * (block.timestamp - _lastDepositAt);
     }
 
-    /**
-     *@notice Function to get the flow rate of a user
-     * @param _superToken Address of the supertoken
-     * @param _sender Address of the user
-     * @return _timestamp Timestamp corresponding to previous stream rate update time
-     * @return _flowRate Flow rate of a user
-     */
+    
+    /// Function to get the flow rate of a user.
+    /// @param _superToken Address of the supertoken.
+    /// @param _sender Address of the user.
+    /// @return _timestamp Timestamp corresponding to previous stream rate update time.
+    /// @return _flowRate Flow rate of a user.
     function getFlow(ISuperToken _superToken, address _sender)
         public
         view
