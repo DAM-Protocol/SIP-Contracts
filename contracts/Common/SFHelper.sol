@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.4;
-
-import { ISuperfluid, ISuperToken, ISuperApp } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import { ISuperfluid, ISuperToken, ISuperAgreement, ISuperApp } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
 import "hardhat/console.sol";
@@ -309,4 +308,27 @@ library SFHelper {
             address(this)
         );
     }
+
+    /// Checks if the caller is the SF host contract.
+    function _onlyHost() internal view {
+        require(
+            msg.sender == address(HOST),
+            "SFHelper: Supports only one host"
+        );
+    }
+
+    // /// Checks if the agreement is of type CFA or IDA.
+    // function _onlyExpected(address _agreementClass) internal view {
+    //     require(
+    //         ISuperAgreement(_agreementClass).agreementType() ==
+    //             keccak256(
+    //                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
+    //             ) ||
+    //             ISuperAgreement(_agreementClass).agreementType() ==
+    //             keccak256(
+    //                 "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
+    //             ),
+    //         "SFHelper: Callback called illegaly"
+    //     );
+    // }
 }

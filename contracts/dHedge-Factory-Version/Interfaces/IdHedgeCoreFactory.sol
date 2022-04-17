@@ -5,9 +5,9 @@ interface IdHedgeCoreFactory {
     event CoreCreated(address newCore, address pool, address poolSuperToken);
     event ImplementationChanged(address newImplementation, string message);
     event FeeRateChanged(uint32 newFeeRate);
-    event MultiSigAddressChanged(address newMultiSig);
+    event DAOAddressChanged(address newDAOAddr);
 
-    function multiSig() external view returns (address);
+    function dao() external view returns (address);
 
     function defaultFeeRate() external view returns (uint32);
 }

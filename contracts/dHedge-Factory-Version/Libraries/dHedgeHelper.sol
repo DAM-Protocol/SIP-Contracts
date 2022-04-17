@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.10;
-
 import { IPoolLogic, IPoolManagerLogic } from "../Interfaces/IdHedge.sol";
 import { IdHedgeCoreFactory } from "../Interfaces/IdHedgeCoreFactory.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
-
-import {IERC20Mod} from "../../Common/IERC20Mod.sol";
+import { IERC20Mod } from "../../Common/IERC20Mod.sol";
 import "hardhat/console.sol";
 
-
 /**
- * @title dHedge helper library.
+ * @title dHEDGE helper library.
  * @author rashtrakoff <rashtrakoff@pm.me>.
  * @dev Contains functions for interacting with dHEDGE protocol pools.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
@@ -41,7 +38,6 @@ library dHedgeHelper {
         address sender,
         uint256 amount
     );
-    event IndexMigrated(uint32 prevIndexId, uint32 tempIndexId);
 
     /// Initialise a market for a new token.
     /// This means, create 3 indices (2 permanent and 1 temporary) along with unlimited approval-
@@ -116,7 +112,8 @@ library dHedgeHelper {
 
         // If all conditions for a deposit is satisfied then proceed with the deposit.
         require(
-            _checkUpkeep(tokenData, _depositToken, _dHedgePool.lastDepositAt),
+            _checkUpkeep(tokenData, _depositToken, _dHedgePool.lastDepositAt) &&
+                isDepositAsset(_dHedgePool, _depositToken),
             "dHedgeHelper: Deposit not required"
         );
 
@@ -126,13 +123,13 @@ library dHedgeHelper {
         uint32 _tempDistIndex = tokenData.tempDistIndex;
         uint256 _superTokenBalance = _superToken.balanceOf(address(this));
 
+        // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
+        // This is because we have to proceed with next cycle of deposits without locking previous cycles' DHPT.
+        _upgradeDHPTx(_poolLogic, _DHPTx);
+
         // If `distAmount` is greater than 0 it means previous cycle's DHPT hasn't been distributed.
         // A distribution needs to occur before next deposit of the same underlying token.
         if (tokenData.distAmount != 0) {
-            // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
-            // This is because we have to proceed with next cycle of deposits without locking previous cycles' DHPT.
-            _upgradeDHPTx(_poolLogic, _DHPTx);
-
             // Perform DHPTx distribution along with few other things (detailed later below).
             _distribute(
                 _dHedgePool,
@@ -202,7 +199,7 @@ library dHedgeHelper {
             _dHedgePool.lastDepositAt = uint64(block.timestamp);
         }
 
-        console.log("Deposit for index %s complete", _lockedIndexId);
+        // console.log("Deposit for index %s complete", _lockedIndexId);
     }
 
     /// Function to distribute DHPTx.
@@ -408,28 +405,40 @@ library dHedgeHelper {
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
-            ISuperToken _DHPTx = _dHedgePool.DHPTx;
+            // ISuperToken _DHPTx = _dHedgePool.DHPTx;
+            uint32 _assignedIndex = tokenData.assignedIndex[_sender];
 
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             // If assigned index is currently locked then we will have to initiate index migration (detailed below).
             if (
                 tokenData.distAmount != 0 &&
-                tokenData.assignedIndex[_sender] == tokenData.lockedIndexId
+                _assignedIndex == tokenData.lockedIndexId
             ) {
-                _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
+                /// @dev TODO check this.
+                _newCtx = _migrateIndex(
+                    tokenData,
+                    _dHedgePool.DHPTx,
+                    _sender,
+                    _newCtx
+                );
             } else {
+                // console.log("Reached afterAgreementTerminated else");
+
                 (uint128 _totalUnits, uint128 _userUnits) = _getUnits(
-                    _DHPTx,
-                    tokenData.assignedIndex[_sender],
+                    _dHedgePool.DHPTx,
+                    _assignedIndex,
                     _sender
                 );
 
+                // Deleting units of the user in their current index.
+                _newCtx = _dHedgePool.DHPTx.deleteSubscriptionInCallback(
+                    _assignedIndex,
+                    _newCtx
+                );
+
                 if (_totalUnits == _userUnits) {
-                    if (
-                        tokenData.assignedIndex[_sender] ==
-                        tokenData.permDistIndex1.indexId
-                    ) {
+                    if (_assignedIndex == tokenData.permDistIndex1.indexId) {
                         tokenData.permDistIndex1.isActive = false;
                         delete tokenData.permDistIndex1.lastDepositAt;
                     } else {
@@ -478,12 +487,11 @@ library dHedgeHelper {
     /// let whatever be the address of the `_depositToken`.
     /// @dev Function which checks if deposit function can be called or not.
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @return _reqUpkeep Boolean depicting need for upkeep.
     /// @return _depositToken Address of an underlying token.
     function requireUpkeep(dHedgeStorage.dHedgePool storage _dHedgePool)
         external
         view
-        returns (bool _reqUpkeep, address _depositToken)
+        returns (address _depositToken)
     {
         // Only if the core contract is active should upkeep really be possible.
         if (_dHedgePool.isActive) {
@@ -509,11 +517,11 @@ library dHedgeHelper {
                         _depositToken,
                         _dHedgePool.lastDepositAt
                     )
-                ) return (true, _depositToken);
+                ) return (_depositToken);
             }
         }
 
-        return (false, address(0));
+        return (address(0));
     }
 
     /// Function which checks for all the conditions to be satisfied for an upkeep task.
@@ -563,7 +571,6 @@ library dHedgeHelper {
         return false;
     }
 
-    
     /// Function to calculate uninvested amount of a user to return that after stream updation/termination.
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
     /// @param _user Address of the user whose uninvested amount has to be calculated.
@@ -608,13 +615,13 @@ library dHedgeHelper {
     /// A upfront fee needs to be collected in order to maintain the same distribution unit price for a deposit cycle-
     /// for all streamers. For example, a person starting a stream of $10/day soon after a deposit gets the same-
     /// number of units as another person starting a stream with the same rate but just before the next deposit.
-    /// However, the seoncd person streamed a lot less than the first person and hence shouldn't get the same-
+    /// However, the second person streamed a lot less than the first person and hence shouldn't get the same-
     /// amount of DHPTx as the first one.
     /// @param _superToken Address of the supertoken that the user is streaming or wants to stream.
     /// @param _sender Address of the user creating/updating/terminating the stream.
     /// @param _lastDepositAt Timestamp corresponding to the latest deposition of the underlying token into the-
     /// dHEGDE pool.
-    /// @param _userUninvested Amount of supertokens corresponding to the user which are present in the core contract. 
+    /// @param _userUninvested Amount of supertokens corresponding to the user which are present in the core contract.
     function _transferBuffer(
         ISuperToken _superToken,
         address _sender,
@@ -668,7 +675,7 @@ library dHedgeHelper {
     /// @param _tokenData Struct containing all the relevant details for a deposit token.
     /// @param _depositToken Address of the underlying token (deposit token and not the supertoken).
     /// @param _factory Address of the core factory contract.
-    /// @param _poolLogic Address of the dHEDGE pool into which deposition should happen. 
+    /// @param _poolLogic Address of the dHEDGE pool into which deposition should happen.
     function _deposit(
         dHedgeStorage.TokenData storage _tokenData,
         address _depositToken,
@@ -679,19 +686,21 @@ library dHedgeHelper {
             address(this)
         );
 
-        // Calculate fee to be collected.
-        uint256 _feeCollected = (_depositBalance * _factory.defaultFeeRate()) /
-            1e6;
-
-        _depositBalance -= _feeCollected;
-
         // Perform deposit transaction iff amount of underlying tokens is greater than 0.
+        /// @dev It may be possible that this check is useless as we are checking for-
+        /// `_downgradeAmount > 0` in `deposit`.
         if (_depositBalance > 0) {
+            // Calculate fee to be collected.
+            uint256 _feeCollected = (_depositBalance *
+                _factory.defaultFeeRate()) / 1e6;
+
+            _depositBalance -= _feeCollected;
+            
             // Transfer the fees collected for the owner only if it's greater than 0.
             // This condition won't be satisfied in case `defaultFeeRate` is set as 0.
             if (_feeCollected > 0) {
                 IERC20(_depositToken).safeTransfer(
-                    IdHedgeCoreFactory(_factory).multiSig(),
+                    IdHedgeCoreFactory(_factory).dao(),
                     _feeCollected
                 );
             }
@@ -702,12 +711,12 @@ library dHedgeHelper {
                 _depositBalance
             );
 
-            console.log(
-                "Token: %s; Amount: %s, DHPT: %s",
-                _depositToken,
-                _depositBalance,
-                _liquidityMinted
-            );
+            // console.log(
+            //     "Token: %s; Amount: %s, DHPT: %s",
+            //     _depositToken,
+            //     _depositBalance,
+            //     _liquidityMinted
+            // );
 
             // Update the amount to be distributed.
             _tokenData.distAmount = _liquidityMinted;
@@ -761,10 +770,10 @@ library dHedgeHelper {
 
         _tokenData.tempDistAmount = _tempDistAmount;
 
-        console.log(
-            "Temp dist amount in migration: %s",
-            _tokenData.tempDistAmount
-        );
+        // console.log(
+        //     "Temp dist amount in migration: %s",
+        //     _tokenData.tempDistAmount
+        // );
 
         // Check if the total units of the locked index is equal to only the user's units.
         // We will have to make this index inactive if the condition is true.
@@ -781,7 +790,7 @@ library dHedgeHelper {
         // Deleting units of the user in locked index
         _newCtx = _DHPTx.deleteSubscriptionInCallback(_lockedIndexId, _newCtx);
 
-        console.log("Subscription deleted from index: %s", _lockedIndexId);
+        // console.log("Subscription deleted from index: %s", _lockedIndexId);
 
         // Assigning units in temporary index
         _newCtx = _DHPTx.updateSharesInCallback(
@@ -807,23 +816,13 @@ library dHedgeHelper {
             !_tokenData.permDistIndex1.isActive
         ) {
             _tokenData.permDistIndex1.isActive = true;
-
-            if (_tokenData.permDistIndex1.lastDepositAt == 0) {
-                _tokenData.permDistIndex1.lastDepositAt = uint64(
-                    block.timestamp
-                );
-            }
+            _tokenData.permDistIndex1.lastDepositAt = uint64(block.timestamp);
         } else if (
             _index == _tokenData.permDistIndex2.indexId &&
             !_tokenData.permDistIndex2.isActive
         ) {
             _tokenData.permDistIndex2.isActive = true;
-
-            if (_tokenData.permDistIndex2.lastDepositAt == 0) {
-                _tokenData.permDistIndex2.lastDepositAt = uint64(
-                    block.timestamp
-                );
-            }
+            _tokenData.permDistIndex2.lastDepositAt = uint64(block.timestamp);
         }
     }
 
@@ -848,38 +847,37 @@ library dHedgeHelper {
         uint256 _totalDistAmount = _tokenData.distAmount;
         uint256 _tempDistAmount = _tokenData.tempDistAmount;
 
-        console.log(
-            "Dist amount: %s, Temp amount: %s",
-            _totalDistAmount,
-            _tempDistAmount
-        );
+        // console.log(
+        //     "Dist amount: %s, Temp amount: %s",
+        //     _totalDistAmount,
+        //     _tempDistAmount
+        // );
 
         // Actual distribution amount corresponding to the permanent distribution index is-
         // the difference of total distribution amount and temporary index's distribution amount.
         uint256 _actualPermDistAmount = _totalDistAmount - _tempDistAmount;
 
-        if (_totalDistAmount != 0) {
-            _tokenData.distAmount = 0;
+        delete _tokenData.distAmount;
 
-            // If actual permanent distribution amount is greater than 0 only then initiate a distribution-
-            // corresponding to the permanent distribution index. This condition will not be satisfied in case-
-            /// everyone subscribed to that index either updates or terminates their stream when that index was locked.
-            if (_actualPermDistAmount != 0) {
-                console.log("Perm dist index: %s", _permDistIndex);
-                _DHPTx.distribute(_permDistIndex, _actualPermDistAmount);
-            }
+        // If actual permanent distribution amount is greater than 0 only then initiate a distribution-
+        // corresponding to the permanent distribution index. This condition will not be satisfied in case-
+        /// everyone subscribed to that index either updates or terminates their stream when that index was locked.
+        if (_actualPermDistAmount != 0) {
+            // console.log("Perm dist index: %s", _permDistIndex);
+            _DHPTx.distribute(_permDistIndex, _actualPermDistAmount);
+        }
 
-            // Only if there are any tokens to be distributed using temporary distribution index-
-            // should we initiate a distribution and create a new temporary index.
-            if (_tempDistAmount != 0) {
-                console.log("Temporary dist index: %s", _tempDistIndex);
+        // Only if there are any tokens to be distributed using temporary distribution index-
+        // should we initiate a distribution and create a new temporary index.
+        if (_tempDistAmount != 0) {
+            // console.log("Temporary dist index: %s", _tempDistIndex);
 
-                _tokenData.tempDistAmount = 0;
-                _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+            delete _tokenData.tempDistAmount;
 
-                // Initiate new temporary index creation.
-                _createTempIndex(_dHedgePool, _tokenData, _DHPTx);
-            }
+            _DHPTx.distribute(_tempDistIndex, _tempDistAmount);
+
+            // Initiate new temporary index creation.
+            _createTempIndex(_dHedgePool, _tokenData, _DHPTx);
         }
     }
 
@@ -903,7 +901,7 @@ library dHedgeHelper {
         // Increase total indices count.
         ++_dHedgePool.latestDistIndex;
 
-        console.log("Created new temp index: %s", _latestDistIndex);
+        // console.log("Created new temp index: %s", _latestDistIndex);
     }
 
     /// Function to upgrade DHPT to DHPTx.
@@ -912,9 +910,8 @@ library dHedgeHelper {
     /// @param _poolLogic Address of the dHEDGE pool into which deposition should happen.
     /// @param _DHPTx Address of the supertoken corresponding to the DHPT of the dHEDGE pool.
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
-        uint256 _underlyingTokenBalance = IERC20Mod(address(_poolLogic)).balanceOf(
-            address(this)
-        );
+        uint256 _underlyingTokenBalance = IERC20Mod(address(_poolLogic))
+            .balanceOf(address(this));
 
         if (
             _poolLogic.getExitRemainingCooldown(address(this)) == 0 &&
@@ -945,10 +942,7 @@ library dHedgeHelper {
         ) = _DHPTx.getIndex(_indexId);
 
         // Total number of units is equal to total number of approved units plus total number of pending units.
-        return (
-            _totalIndexApprovedUnits + _totalIndexPendingUnits,
-            _userUnits
-        );
+        return (_totalIndexApprovedUnits + _totalIndexPendingUnits, _userUnits);
     }
 
     /// Function which fetches amount of underlying tokens to be deposited into the dHEDGE pool.
@@ -987,11 +981,11 @@ library dHedgeHelper {
         uint128 _totalIndexUnits2 = _totalIndexApprovedUnits2 +
             _totalIndexPendingUnits2;
 
-        console.log(
-            "Total index units 1 and 2: %s, %s",
-            _totalIndexUnits1,
-            _totalIndexUnits2
-        );
+        // console.log(
+        //     "Total index units 1 and 2: %s, %s",
+        //     _totalIndexUnits1,
+        //     _totalIndexUnits2
+        // );
 
         return
             ((

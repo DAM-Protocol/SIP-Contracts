@@ -37,5 +37,5 @@ interface IdHedgeCore {
         view
         returns (uint256);
 
-    function requireUpkeep() external view returns (bool, address);
+    function requireUpkeep() external view returns (address);
 }

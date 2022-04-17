@@ -85,7 +85,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     function emergencyWithdraw(address _token) external {
         _onlyOwner(msg.sender);
         IERC20(_token).safeTransfer(
-            IdHedgeCoreFactory(poolData.factory).multiSig(),
+            IdHedgeCoreFactory(poolData.factory).dao(),
             IERC20(_token).balanceOf(address(this))
         );
 
@@ -194,9 +194,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     }
 
     /// Checks if deposit action can be performed.
-    /// @return Boolean indicating if upkeep/deposit can be performed.
     /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool.
-    function requireUpkeep() public view override returns (bool, address) {
+    function requireUpkeep() public view override returns (address) {
         return poolData.requireUpkeep();
     }
 
@@ -214,41 +213,20 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         );
     }
 
-    /// Checks if the caller is the SF host contract.
-    function _onlyHost() internal view {
-        require(
-            msg.sender == address(SFHelper.HOST),
-            "dHedgeCore: Supports only one host"
-        );
-    }
-
-    /// Checks if the agreement is of type CFA or IDA.
-    function _onlyExpected(address _agreementClass) internal view {
-        require(
-            ISuperAgreement(_agreementClass).agreementType() ==
-                keccak256(
-                    "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
-                ) ||
-                ISuperAgreement(_agreementClass).agreementType() ==
-                keccak256(
-                    "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
-                ),
-            "dHedgeCore: Callback called illegaly"
-        );
-    }
-
     /**************************************************************************
      * SuperApp callbacks
      *************************************************************************/
+    
+    /// @dev TODO Check if `_onlyExpected` is even required.
     function beforeAgreementCreated(
         ISuperToken _superToken,
-        address _agreementClass,
+        address, /*_agreementClass*/
         bytes32, /*agreementId*/
         bytes calldata, /*agreementData*/
         bytes calldata // _ctx
     ) external view override returns (bytes memory _cbdata) {
-        _onlyHost();
-        _onlyExpected(_agreementClass);
+        SFHelper._onlyHost();
+        // SFHelper._onlyExpected(_agreementClass);
         _onlyActive();
 
         address _underlyingToken = _superToken.getUnderlyingToken();
@@ -272,8 +250,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         bytes calldata _cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
-        _onlyHost();
-        _onlyExpected(_agreementClass);
+        SFHelper._onlyHost();
+        // SFHelper._onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
@@ -296,8 +274,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         bytes calldata, /*agreementData*/
         bytes calldata _ctx
     ) external view override returns (bytes memory _cbdata) {
-        _onlyHost();
-        _onlyExpected(_agreementClass);
+        SFHelper._onlyHost();
+        // SFHelper._onlyExpected(_agreementClass);
         _onlyActive();
 
         _cbdata = poolData.beforeAgreement(
@@ -315,8 +293,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         bytes calldata _cbdata, //_cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
-        _onlyHost();
-        _onlyExpected(_agreementClass);
+        SFHelper._onlyHost();
+        // SFHelper._onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
@@ -339,7 +317,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         bytes calldata, /*agreementData*/
         bytes calldata _ctx
     ) external view override returns (bytes memory _cbdata) {
-        _onlyHost();
+        SFHelper._onlyHost();
 
         try
             poolData.beforeAgreement(
@@ -363,7 +341,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         bytes calldata _cbdata, //_cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
-        _onlyHost();
+        SFHelper._onlyHost();
         _newCtx = _ctx;
 
         address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
@@ -379,7 +357,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         returns (bytes memory _modCtx) {
             _newCtx = _modCtx;
         } catch (bytes memory _error) {
-            console.log("Reverted");
+            // console.log("Reverted");
             console.logBytes(_error);
         }
 

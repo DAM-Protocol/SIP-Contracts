@@ -364,6 +364,70 @@ describe("3-Index Approach Testing", function () {
     });
 
     expect(USDCWhaleRes.exist).to.equal(true);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: admin.address,
+        receiver: app.address,
+      })
+      .exec(admin);
+
+    adminRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 2,
+      subscriber: admin.address,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(adminRes.exist).to.equal(false);
+
+    await startAndSub(USDCWhale, USDC, userFlowRate);
+
+    USDCWhaleRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 2,
+      subscriber: USDCWhaleAddr,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(USDCWhaleRes.exist).to.equal(true);
+
+    await increaseTime(getSeconds(1));
+
+    await app.dHedgeDeposit(USDC.token);
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+
+    expect(tokenDistIndexObj[3]).to.equal(2);
+
+    await increaseTime(getSeconds(1));
+
+    await app.distribute(USDC.token);
+
+    await sf.cfaV1
+      .deleteFlow({
+        superToken: USDC.superToken,
+        sender: USDCWhaleAddr,
+        receiver: app.address,
+      })
+      .exec(USDCWhale);
+
+    USDCWhaleRes = await sf.idaV1.getSubscription({
+      superToken: DHPTx.address,
+      publisher: app.address,
+      indexId: 2,
+      subscriber: USDCWhaleAddr,
+      providerOrSigner: ethersProvider,
+    });
+
+    expect(USDCWhaleRes.exist).to.equal(false);
   });
 
   it("Should lock expected indices", async () => {
@@ -1150,7 +1214,7 @@ describe("3-Index Approach Testing", function () {
     ).to.be.closeTo(constants.Zero, parseUnits("1", 18));
   });
 
-  it.only("should be able to distribute a user's share correctly (after inactivity)", async () => {
+  it("should be able to distribute a user's share correctly (after inactivity)", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
@@ -1163,7 +1227,7 @@ describe("3-Index Approach Testing", function () {
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
-    console.log("DHPT balance in contract: ", DHPTBalance1.toString());
+    // console.log("DHPT balance in contract: ", DHPTBalance1.toString());
 
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
 

@@ -9,9 +9,9 @@ import "./Interfaces/IdHedgeCoreFactory.sol";
 import "./dHedgeCore.sol";
 
 /**
- * @title dHedge core factory
- * @author rashtrakoff <rashtrakoff@pm.me>
- * @notice Contract to create new cores easily
+ * @title dHedge core factory.
+ * @author rashtrakoff <rashtrakoff@pm.me>.
+ * @notice Contract to create new cores easily.
  * @dev Some variables necessary/common for all cores are stored here.
  * These variables are referred in the cores.
  */
@@ -20,25 +20,25 @@ import "./dHedgeCore.sol";
 contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     address public implementation;
 
-    /// @notice The DAO which receives fees
-    address public override multiSig;
+    /// @notice The DAO which receives fees.
+    address public override dao;
 
-    /// @notice Fee rate for collecting streaming fees scaled to 1e6
+    /// @notice Fee rate for collecting streaming fees scaled to 1e6.
     uint32 public override defaultFeeRate;
 
-    /// @custom:note CONFIG_WORD is used to omit the specific agreement hooks of superapps (NOOP - Not Operate)
+    /// @custom:note CONFIG_WORD is used to omit the specific agreement hooks of superapps (NOOP - Not Operate).
     uint256 private immutable CONFIG_WORD = 1; // 1 << 0 == 1
 
-    /// @notice Mapping containing core address for every dHEDGE pool if deployed/created
+    /// @notice Mapping containing core address for every dHEDGE pool if deployed/created.
     mapping(address => address) public cores;
 
-    constructor(address _multiSig, uint32 _defaultFeeRate) {
+    constructor(address _dao, uint32 _defaultFeeRate) {
         implementation = address(new dHedgeCore());
-        multiSig = _multiSig;
+        dao = _dao;
         defaultFeeRate = _defaultFeeRate;
     }
 
-    /// @dev Sets a new implementation of core contract
+    /// @dev Sets a new implementation of core contract.
     /// @dev Only to be used in case of an issue with existing/default implementation. Must be removed after testing.
     function setImplementation(
         address _implementation,
@@ -49,25 +49,25 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
         emit ImplementationChanged(_implementation, _message);
     }
 
-    /// @dev Sets fee rate for all cores
-    /// @param _defaultFeeRate The new fee rate scaled to 1e6
+    /// @dev Sets fee rate for all cores.
+    /// @param _defaultFeeRate The new fee rate scaled to 1e6.
     function setDefaultFeeRate(uint32 _defaultFeeRate) external onlyOwner {
         defaultFeeRate = _defaultFeeRate;
 
         emit FeeRateChanged(_defaultFeeRate);
     }
 
-    /// @dev Sets multisig address for all cores
-    /// @param _multiSig New address for the DAO
-    function setMultiSigAddress(address _multiSig) external onlyOwner {
-        multiSig = _multiSig;
+    /// @dev Sets DAO address for all cores.
+    /// @param _dao New address for the DAO.
+    function setDAOAddress(address _dao) external onlyOwner {
+        dao = _dao;
 
-        emit MultiSigAddressChanged(_multiSig);
+        emit DAOAddressChanged(_dao);
     }
 
-    /// @notice Creates a new core for a given dHEDGE pool
-    /// @param _dHedgePool Address of the dHEDGE pool for which a core needs to be created
-    /// @param _DHPTx Supertoken of the corresponding DHPT of `_dHedgePool`
+    /// @notice Creates a new core for a given dHEDGE pool.
+    /// @param _dHedgePool Address of the dHEDGE pool for which a core needs to be created.
+    /// @param _DHPTx Supertoken of the corresponding DHPT of `_dHedgePool`.
     function createdHedgeCore(address _dHedgePool, ISuperToken _DHPTx)
         external
     {
