@@ -236,16 +236,15 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementCreated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after creation of a stream (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @param _sender Address of the user who is updating the stream rate.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
     /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementCreated` hook.
     function afterAgreementCreated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
-        address _sender,
         address _agreementClass,
         address _underlyingToken,
+        bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
     ) external returns (bytes memory _newCtx) {
@@ -258,6 +257,7 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
+            (address _sender, ) = abi.decode(_agreementData, (address, address));
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -291,6 +291,7 @@ library dHedgeHelper {
             _newCtx = _superToken.updateSharesInCallback(
                 _DHPTx,
                 _index,
+                _sender,
                 _newCtx
             );
         }
@@ -299,16 +300,15 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementUpdated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after updation of stream rate (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @param _sender Address of the user who is updating the stream rate.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
     /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementUpdated` hook.
     function afterAgreementUpdated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
-        address _sender,
         address _agreementClass,
         address _underlyingToken,
+        bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
     ) external returns (bytes memory _newCtx) {
@@ -320,6 +320,7 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
+            (address _sender, ) = abi.decode(_agreementData, (address, address));
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -373,6 +374,7 @@ library dHedgeHelper {
             _newCtx = _superToken.updateSharesInCallback(
                 _DHPTx,
                 _currActiveIndex,
+                _sender,
                 _newCtx
             );
         }
@@ -381,16 +383,15 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementTerminated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after termination of the stream (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @param _sender Address of the user who is updating the stream rate.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
     /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementTerminated` hook.
     function afterAgreementTerminated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
-        address _sender,
         address _agreementClass,
         address _underlyingToken,
+        bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
     ) external returns (bytes memory _newCtx) {
@@ -402,6 +403,7 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
+            (address _sender, ) = abi.decode(_agreementData, (address, address));
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -434,6 +436,7 @@ library dHedgeHelper {
                 // Deleting units of the user in their current index.
                 _newCtx = _dHedgePool.DHPTx.deleteSubscriptionInCallback(
                     _assignedIndex,
+                    _sender,
                     _newCtx
                 );
 
@@ -458,14 +461,20 @@ library dHedgeHelper {
     /// Helper function that's called before streams are updated or terminated.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
     /// @param _underlyingToken Underlying token of the supertoken.
-    /// @param _ctx Superfluid context object.
     /// @return _cbdata Callback data that needs to be passed on to after agreement hooks.
     function beforeAgreement(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _agreementClass,
         address _underlyingToken,
-        bytes memory _ctx
-    ) external view returns (bytes memory _cbdata) {
+        bytes memory _agreementData
+    )
+        external
+        view
+        returns (
+            // bytes memory _ctx
+            bytes memory _cbdata
+        )
+    {
         _cbdata = new bytes(0);
 
         if (
@@ -474,11 +483,12 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+            // address _sender = SFHelper.HOST.decodeCtx(_ctx).msgSender;
+            (address _user, ) = abi.decode(_agreementData, (address, address));
 
             // Encode the uninvested amount. We calculate it before modifying the stream rate.
             _cbdata = abi.encode(
-                calcUserUninvested(_dHedgePool, _sender, _underlyingToken)
+                calcUserUninvested(_dHedgePool, _user, _underlyingToken)
             );
         }
     }
@@ -695,7 +705,7 @@ library dHedgeHelper {
                 _factory.defaultFeeRate()) / 1e6;
 
             _depositBalance -= _feeCollected;
-            
+
             // Transfer the fees collected for the owner only if it's greater than 0.
             // This condition won't be satisfied in case `defaultFeeRate` is set as 0.
             if (_feeCollected > 0) {
@@ -788,7 +798,7 @@ library dHedgeHelper {
         }
 
         // Deleting units of the user in locked index
-        _newCtx = _DHPTx.deleteSubscriptionInCallback(_lockedIndexId, _newCtx);
+        _newCtx = _DHPTx.deleteSubscriptionInCallback(_lockedIndexId, _sender, _newCtx);
 
         // console.log("Subscription deleted from index: %s", _lockedIndexId);
 
@@ -796,6 +806,7 @@ library dHedgeHelper {
         _newCtx = _DHPTx.updateSharesInCallback(
             _tokenData.tempDistIndex,
             _userUnits,
+            _sender,
             _newCtx
         );
 

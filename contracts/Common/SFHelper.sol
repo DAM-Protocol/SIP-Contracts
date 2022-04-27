@@ -120,10 +120,11 @@ library SFHelper {
         ISuperToken _superStreamToken,
         ISuperToken _superDistToken,
         uint32 _index,
+        address _user,
         bytes calldata _ctx
     ) external returns (bytes memory _newCtx) {
-        address _msgSender = HOST.decodeCtx(_ctx).msgSender;
-        (, int96 _flowRate) = getFlow(_superStreamToken, _msgSender);
+        // address _msgSender = HOST.decodeCtx(_ctx).msgSender;
+        (, int96 _flowRate) = getFlow(_superStreamToken, _user);
         uint256 _userFlowRate = uint256(uint96(_flowRate));
 
         (_newCtx, ) = HOST.callAgreementWithContext(
@@ -132,7 +133,7 @@ library SFHelper {
                 IDA_V1.updateSubscription.selector,
                 _superDistToken,
                 _index,
-                _msgSender,
+                _user,
                 uint128(_userFlowRate / 1e9),
                 new bytes(0)
             ),
@@ -150,9 +151,10 @@ library SFHelper {
         ISuperToken _superDistToken,
         uint32 _index,
         uint128 _units,
+        address _user,
         bytes calldata _ctx
     ) external returns (bytes memory _newCtx) {
-        address _msgSender = HOST.decodeCtx(_ctx).msgSender;
+        // address _msgSender = HOST.decodeCtx(_ctx).msgSender;
 
         (_newCtx, ) = HOST.callAgreementWithContext(
             IDA_V1,
@@ -160,7 +162,7 @@ library SFHelper {
                 IDA_V1.updateSubscription.selector,
                 _superDistToken,
                 _index,
-                _msgSender,
+                _user,
                 _units,
                 new bytes(0)
             ),
@@ -172,9 +174,10 @@ library SFHelper {
     function deleteSubscriptionInCallback(
         ISuperToken _superToken,
         uint32 _index,
+        address _user,
         bytes calldata _ctx
     ) external returns (bytes memory _newCtx) {
-        address _msgSender = HOST.decodeCtx(_ctx).msgSender;
+        // address _msgSender = HOST.decodeCtx(_ctx).msgSender;
 
         (_newCtx, ) = HOST.callAgreementWithContext(
             IDA_V1,
@@ -183,7 +186,7 @@ library SFHelper {
                 _superToken,
                 address(this),
                 _index,
-                _msgSender,
+                _user,
                 new bytes(0)
             ),
             new bytes(0),

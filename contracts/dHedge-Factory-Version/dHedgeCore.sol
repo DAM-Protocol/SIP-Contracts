@@ -223,10 +223,9 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         address, /*_agreementClass*/
         bytes32, /*agreementId*/
         bytes calldata, /*agreementData*/
-        bytes calldata // _ctx
+        bytes calldata /*_ctx*/
     ) external view override returns (bytes memory _cbdata) {
         SFHelper._onlyHost();
-        // SFHelper._onlyExpected(_agreementClass);
         _onlyActive();
 
         address _underlyingToken = _superToken.getUnderlyingToken();
@@ -245,77 +244,67 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     function afterAgreementCreated(
         ISuperToken _superToken,
         address _agreementClass,
-        bytes32, // _agreementId,
-        bytes calldata, // _agreementData,
+        bytes32, /*_agreementId*/
+        bytes calldata _agreementData,
         bytes calldata _cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
         SFHelper._onlyHost();
-        // SFHelper._onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
-        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
 
         _newCtx = poolData.afterAgreementCreated(
-            _user,
             _agreementClass,
             _superToken.getUnderlyingToken(),
+            _agreementData,
             _newCtx,
             _cbdata
         );
-
-        emit StreamModified(_superToken, _user);
     }
 
     function beforeAgreementUpdated(
         ISuperToken _superToken,
         address _agreementClass,
         bytes32, /*agreementId*/
-        bytes calldata, /*agreementData*/
-        bytes calldata _ctx
+        bytes calldata _agreementData,
+        bytes calldata /*_ctx*/
     ) external view override returns (bytes memory _cbdata) {
         SFHelper._onlyHost();
-        // SFHelper._onlyExpected(_agreementClass);
         _onlyActive();
 
         _cbdata = poolData.beforeAgreement(
             _agreementClass,
             _superToken.getUnderlyingToken(),
-            _ctx
+            _agreementData
         );
     }
 
     function afterAgreementUpdated(
         ISuperToken _superToken,
         address _agreementClass,
-        bytes32, //_agreementId,
-        bytes calldata, //_agreementData,
-        bytes calldata _cbdata, //_cbdata,
+        bytes32, /*_agreementId*/
+        bytes calldata _agreementData,
+        bytes calldata _cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
         SFHelper._onlyHost();
-        // SFHelper._onlyExpected(_agreementClass);
         _newCtx = _ctx;
 
-        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
-
         _newCtx = poolData.afterAgreementUpdated(
-            _user,
             _agreementClass,
             _superToken.getUnderlyingToken(),
+            _agreementData,
             _newCtx,
             _cbdata
         );
-
-        emit StreamModified(_superToken, _user);
     }
 
     function beforeAgreementTerminated(
         ISuperToken _superToken,
         address _agreementClass,
         bytes32, /*agreementId*/
-        bytes calldata, /*agreementData*/
-        bytes calldata _ctx
+        bytes calldata _agreementData,
+        bytes calldata /*_ctx*/
     ) external view override returns (bytes memory _cbdata) {
         SFHelper._onlyHost();
 
@@ -323,7 +312,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             poolData.beforeAgreement(
                 _agreementClass,
                 _superToken.getUnderlyingToken(),
-                _ctx
+                _agreementData
             )
         returns (bytes memory _newCbData) {
             _cbdata = _newCbData;
@@ -337,20 +326,18 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         ISuperToken _superToken,
         address _agreementClass,
         bytes32, //_agreementId,
-        bytes calldata, // _agreementData,
-        bytes calldata _cbdata, //_cbdata,
+        bytes calldata _agreementData,
+        bytes calldata _cbdata,
         bytes calldata _ctx
     ) external override returns (bytes memory _newCtx) {
         SFHelper._onlyHost();
         _newCtx = _ctx;
 
-        address _user = SFHelper.HOST.decodeCtx(_newCtx).msgSender;
-
         try
             poolData.afterAgreementTerminated(
-                _user,
                 _agreementClass,
                 _superToken.getUnderlyingToken(),
+                _agreementData,
                 _newCtx,
                 _cbdata
             )
@@ -360,7 +347,5 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             // console.log("Reverted");
             console.logBytes(_error);
         }
-
-        emit StreamModified(_superToken, _user);
     }
 }
