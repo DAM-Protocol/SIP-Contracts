@@ -10,7 +10,7 @@ import { IERC20Mod } from "../../Common/IERC20Mod.sol";
 import "hardhat/console.sol";
 
 /**
- * @title dHEDGE helper library.
+ * @title dHEDGE core helper library.
  * @author rashtrakoff <rashtrakoff@pm.me>.
  * @dev Contains functions for interacting with dHEDGE protocol pools.
  * @custom:experimental This is an experimental contract/library. Use at your own risk.
@@ -23,6 +23,7 @@ library dHedgeHelper {
     using SafeERC20 for IERC20;
     using SFHelper for ISuperToken;
 
+    event TokenInitialised(ISuperToken superToken, address token);
     event TokenDeposited(
         address token,
         uint256 amount,
@@ -94,6 +95,8 @@ library dHedgeHelper {
             _dHedgePool.poolLogic,
             type(uint256).max
         );
+
+        emit TokenInitialised(_superToken, _underlyingToken);
     }
 
     /// Function to deposit tokens into a dHedge pool.
@@ -217,6 +220,12 @@ library dHedgeHelper {
         // Upgrade the DHPT in the contract.
         _upgradeDHPTx(IPoolLogic(_dHedgePool.poolLogic), _DHPTx);
 
+        // console.log(
+        //     "DistAmount: %s, DHPTx balance: %s",
+        //     tokenData.distAmount,
+        //     _DHPTx.balanceOf(address(this))
+        // );
+
         // Should only attempt to distribute DHPTx if there are any to be distributed.
         require(
             tokenData.distAmount != 0 && _DHPTx.balanceOf(address(this)) != 0,
@@ -257,7 +266,10 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            (address _sender, ) = abi.decode(_agreementData, (address, address));
+            (address _sender, ) = abi.decode(
+                _agreementData,
+                (address, address)
+            );
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -320,7 +332,10 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            (address _sender, ) = abi.decode(_agreementData, (address, address));
+            (address _sender, ) = abi.decode(
+                _agreementData,
+                (address, address)
+            );
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -403,7 +418,10 @@ library dHedgeHelper {
                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
             )
         ) {
-            (address _sender, ) = abi.decode(_agreementData, (address, address));
+            (address _sender, ) = abi.decode(
+                _agreementData,
+                (address, address)
+            );
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
@@ -798,7 +816,11 @@ library dHedgeHelper {
         }
 
         // Deleting units of the user in locked index
-        _newCtx = _DHPTx.deleteSubscriptionInCallback(_lockedIndexId, _sender, _newCtx);
+        _newCtx = _DHPTx.deleteSubscriptionInCallback(
+            _lockedIndexId,
+            _sender,
+            _newCtx
+        );
 
         // console.log("Subscription deleted from index: %s", _lockedIndexId);
 
@@ -923,6 +945,12 @@ library dHedgeHelper {
     function _upgradeDHPTx(IPoolLogic _poolLogic, ISuperToken _DHPTx) private {
         uint256 _underlyingTokenBalance = IERC20Mod(address(_poolLogic))
             .balanceOf(address(this));
+
+        // console.log(
+        //     "Underlying token: %s, Remaining time: %s",
+        //     _underlyingTokenBalance,
+        //     _poolLogic.getExitRemainingCooldown(address(this))
+        // );
 
         if (
             _poolLogic.getExitRemainingCooldown(address(this)) == 0 &&

@@ -7,6 +7,7 @@ require("solidity-coverage");
 require("hardhat-contract-sizer");
 require("hardhat-tracer");
 require("hardhat-deploy");
+require("hardhat-erc1820");
 require("./tasks/dHedge-Factory-Version/CreateSIP");
 require("./tasks/dHedge-Factory-Version/CreateSuperToken");
 require("./tasks/dHedge-Factory-Version/PauseCore");
@@ -20,6 +21,14 @@ require("./tasks/dHedge-Factory-Version/DeactivateCore");
  */
 module.exports = {
   solidity: {
+    // compilers: [
+    //   {
+    //     version: "0.8.10",
+    //   },
+    //   {
+    //     version: "0.8.13",
+    //   },
+    // ],
     version: "0.8.10",
     settings: {
       optimizer: {
@@ -35,10 +44,11 @@ module.exports = {
         url: process.env.POLYGON_NODE_URL,
         // blockNumber: 23736635,
         blockNumber: 25295628,
-        enabled: true,
+        enabled: false,
       },
       // accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
       saveDeployments: false,
+      allowUnlimitedContractSize: true,
     },
     polygon: {
       url: process.env.POLYGON_NODE_URL,

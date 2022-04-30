@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
+
 import { ISuperfluid, ISuperToken, ISuperAgreement, ISuperApp } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+
 import "hardhat/console.sol";
 
 /**
@@ -16,13 +18,24 @@ library SFHelper {
     event NewSupertokenAdded(address _superToken, uint32 _index);
     event NewTemporaryIndexCreated(address _superToken, uint32 _index);
 
+    // Mainnet contract addresses.
+    // ISuperfluid public constant HOST =
+    //     ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
+    // IConstantFlowAgreementV1 public constant CFA_V1 =
+    //     IConstantFlowAgreementV1(0x6EeE6060f715257b970700bc2656De21dEdF074C);
+    // IInstantDistributionAgreementV1 public constant IDA_V1 =
+    //     IInstantDistributionAgreementV1(
+    //         0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
+    //     );
+
+    // Addresses for local testing.
     ISuperfluid public constant HOST =
-        ISuperfluid(0x3E14dC1b13c488a8d5D310918780c983bD5982E7);
+        ISuperfluid(0x0165878A594ca255338adfa4d48449f69242Eb8F);
     IConstantFlowAgreementV1 public constant CFA_V1 =
-        IConstantFlowAgreementV1(0x6EeE6060f715257b970700bc2656De21dEdF074C);
+        IConstantFlowAgreementV1(0x610178dA211FEF7D417bC0e6FeD39F05609AD788);
     IInstantDistributionAgreementV1 public constant IDA_V1 =
         IInstantDistributionAgreementV1(
-            0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
+            0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
         );
 
     /// Function to distribute a supertoken amount according to an index.
@@ -34,12 +47,12 @@ library SFHelper {
         uint32 _index,
         uint256 _amount
     ) external returns (bytes memory _newCtx) {
-        console.log(
-            "Amount to distribute: %s, Index: %s, DHPTx: %s",
-            _amount,
-            _index,
-            _superToken.balanceOf(address(this))
-        );
+        // console.log(
+        //     "Amount to distribute: %s, Index: %s, DHPTx: %s",
+        //     _amount,
+        //     _index,
+        //     _superToken.balanceOf(address(this))
+        // );
         (uint256 _actualAmount, ) = IDA_V1.calculateDistribution(
             _superToken,
             address(this),
@@ -61,10 +74,9 @@ library SFHelper {
             new bytes(0)
         );
 
-        console.log("Actual amount distributed: %s", _actualAmount);
+        // console.log("Actual amount distributed: %s", _actualAmount);
     }
 
-    
     /// Function to create a distribution index.
     /// @param _superToken The supertoken to be distributed.
     /// @param _index New index value containing share details.
@@ -86,7 +98,6 @@ library SFHelper {
         emit NewSupertokenAdded(address(_superToken), _index);
     }
 
-    
     /// Function to create a distribution index.
     /// @param _superToken The supertoken to be distributed.
     /// @param _index New index value containing share details.
@@ -110,7 +121,6 @@ library SFHelper {
         emit NewTemporaryIndexCreated(address(_superToken), _index);
     }
 
-    
     /// @dev Function to update shares of a user.
     /// @param _superStreamToken The supertoken that the user is streaming.
     /// @param _superDistToken The supertoken that's distributed in index with value `_index`.
@@ -194,7 +204,6 @@ library SFHelper {
         );
     }
 
-    
     /// Function to close a stream.
     /// @dev This function should be called provided the app is jailed or user is running low on supertokens.
     /// @param _superToken The supertoken that the user is streaming
@@ -273,7 +282,6 @@ library SFHelper {
             IDA_V1.getSubscription(_superToken, address(this), _index, _user);
     }
 
-    
     /// Calculates uninvested amount of a user.
     /// @param _superToken Token being streamed.
     /// @param _user Address of the user.
@@ -294,7 +302,6 @@ library SFHelper {
         return _userFlowRate * (block.timestamp - _lastDepositAt);
     }
 
-    
     /// Function to get the flow rate of a user.
     /// @param _superToken Address of the supertoken.
     /// @param _sender Address of the user.

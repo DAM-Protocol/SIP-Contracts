@@ -4,83 +4,73 @@ const { expect } = require("chai");
 const { ethers, waffle } = require("hardhat");
 const { provider, loadFixture } = waffle;
 const { parseUnits } = require("@ethersproject/units");
-const SuperfluidSDK = require("@superfluid-finance/sdk-core");
-const SuperfluidGovernanceBase = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidGovernanceII.json");
-const dHEDGEPoolFactory = require("../../helpers/PoolFactoryABI.json");
+const { Framework } = require("@superfluid-finance/sdk-core");
+const { deploySuperfluid } = require("../utils/SFSetup");
 const {
   getBigNumber,
   getSeconds,
   increaseTime,
-  impersonateAccounts,
 } = require("../../helpers/helpers");
 const { constants } = require("ethers");
 
+// const errorHandler = (err) => {
+//   if (err) throw err;
+// };
+
 describe("3-Index Approach Testing", function () {
-  const DAI = {
-    token: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
-    superToken: "0x1305f6b6df9dc47159d12eb7ac2804d4a33173c2",
-    decimals: 18,
-  };
-  const USDC = {
-    token: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-    superToken: "0xcaa7349cea390f89641fe306d93591f87595dc1f",
-    decimals: 6,
-  };
-  const SFConfig = {
-    hostAddress: "0x3E14dC1b13c488a8d5D310918780c983bD5982E7",
-    CFAv1: "0x6EeE6060f715257b970700bc2656De21dEdF074C",
-    IDAv1: "0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1",
-  };
-
-  const hostABI = [
-    "function getGovernance() external view returns (address)",
-    "function getSuperTokenFactory() external view returns(address)",
-  ];
-
-  const USDCWhaleAddr = "0x947d711c25220d8301c087b25ba111fe8cbf6672";
-  const DAIWhaleAddr = "0x85fcd7dd0a1e1a9fcd5fd886ed522de8221c3ee5";
-  const DAIWhaleAddr2 = "0x4A35582a710E1F4b2030A3F826DA20BfB6703C09";
-
-  // dHEDGE Stablecoin Yield (https://app.dhedge.org/pool/0xbae28251b2a4e621aa7e20538c06dee010bc06de)
-  // Supports DAI and USDC
-  const Pool1 = "0xbae28251b2a4e621aa7e20538c06dee010bc06de";
-
-  const [admin, DAO] = provider.getWallets();
+  const [admin, DAO, USDCWhale, DAIWhale, DAIWhale2] = provider.getWallets();
   const ethersProvider = provider;
 
-  let sf, host;
-  let USDCWhale, DAIWhale, DAIWhale2;
-  let DAIContract, USDCContract, DHPT;
+  let sf, resolverAddress, superTokenFactory;
+  // let USDCWhale, DAIWhale, DAIWhale2;
+  let DAI, USDC, DHPT;
+  let mockPool, mockPoolFactory;
   let USDCx, DAIx, DHPTx;
   let dHedgeHelper, dHedgeStorage, SFHelper;
-  let app, poolManager;
+  let app;
 
   before(async () => {
-    [USDCWhale, DAIWhale, DAIWhale2, dHEDGEOwner] = await impersonateAccounts([
-      USDCWhaleAddr,
-      DAIWhaleAddr,
-      DAIWhaleAddr2,
-      "0xc715Aa67866A2FEF297B12Cb26E953481AeD2df4",
-    ]);
-    DAIContract = await ethers.getContractAt("IERC20", DAI.token);
-    USDCContract = await ethers.getContractAt("IERC20", USDC.token);
+    [resolverAddress, , , superTokenFactory] = await deploySuperfluid(admin);
 
-    sf = await SuperfluidSDK.Framework.create({
+    sf = await Framework.create({
       networkName: "hardhat",
       dataMode: "WEB3_ONLY",
-      resolverAddress: "0xE0cc76334405EE8b39213E620587d815967af39C", // Polygon mainnet resolver
-      protocolReleaseVersion: "v1",
+      resolverAddress: resolverAddress, // Polygon mainnet resolver
+      protocolReleaseVersion: "test",
       provider: ethersProvider,
     });
 
-    host = await ethers.getContractAt(hostABI, SFConfig.hostAddress);
+    tokenFactory = await ethers.getContractFactory("MockERC20", admin);
 
-    USDCx = await sf.loadSuperToken(USDC.superToken);
-    DAIx = await sf.loadSuperToken(DAI.superToken);
+    DAI = await tokenFactory.deploy("DAI mock", "DAI", 18);
+    USDC = await tokenFactory.deploy("USDC mock", "USDC", 6);
+    await DAI.deployed();
+    await USDC.deployed();
+    // DHPT = await tokenFactory.deploy("DHPT Mock", "DHPT", 18);
 
-    DHPTxAddr = await createSuperToken(Pool1);
-    DHPTx = await sf.loadSuperToken(DHPTxAddr);
-    DHPT = await ethers.getContractAt("IERC20", Pool1);
+    console.log("Mock tokens deployed");
+    // DHPT = new Contract(DHPTx.underlyingToken.address, "IERC20", admin);
+
+    // mockPool = await deployMockContract(admin, PoolLogic);
+    mockPoolFactory = await ethers.getContractFactory("MockdHEDGEPool", admin);
+
+    DAIxAddr = await createSuperToken(
+      superTokenFactory.address,
+      DAI.address,
+      18,
+      "Super DAI",
+      "DAIx"
+    );
+    USDCxAddr = await createSuperToken(
+      superTokenFactory.address,
+      USDC.address,
+      6,
+      "Super USDC",
+      "USDCx"
+    );
+
+    DAIx = await sf.loadSuperToken(DAIxAddr);
+    USDCx = await sf.loadSuperToken(USDCxAddr);
 
     SFHelperFactory = await ethers.getContractFactory("SFHelper");
     SFHelper = await SFHelperFactory.deploy();
@@ -97,43 +87,28 @@ describe("3-Index Approach Testing", function () {
     });
     dHedgeHelper = await dHedgeHelperFactory.deploy();
     await dHedgeHelper.deployed();
-
-    AssetHandlerABI = [
-      "function setChainlinkTimeout(uint256) external",
-      "function owner() external view returns (address)",
-    ];
-
-    AssetHandlerContract = await ethers.getContractAt(
-      AssetHandlerABI,
-      "0x760FE3179c8491f4b75b21A81F3eE4a5D616A28a"
-    );
-    await AssetHandlerContract.connect(dHEDGEOwner).setChainlinkTimeout(
-      getSeconds(500).toString()
-    );
-
-    // PoolLogicABI = [
-    //   "function manager() internal view returns (address)",
-    //   "function poolManagerLogic() public view returns (address)",
-    // ];
-    // PoolLogicContract = await ethers.getContractAt(PoolLogicABI, Pool1);
-    // poolManagerLogic = await PoolLogicContract.poolManagerLogic();
-
-    // PoolManagerLogicABI = [
-    //   "function changeAssets(Asset[] calldata, address[] calldata) external",
-    // ];
-
-    // poolManager = await ethers.getContractAt(
-    //   PoolManagerLogicABI,
-    //   poolManagerLogic
-    // );
-
-    PoolFactoryContract = await ethers.getContractAt(
-      JSON.parse(dHEDGEPoolFactory.result),
-      "0xfdc7b8bFe0DD3513Cc669bB8d601Cb83e2F69cB0"
-    );
   });
 
   async function setupEnv() {
+    mockPool = await mockPoolFactory.deploy("DHPT Mock", "DHPT", 18);
+    await mockPool.deployed();
+
+    DHPT = mockPool;
+
+    DHPTxAddr = await createSuperToken(
+      superTokenFactory.address,
+      mockPool.address,
+      18,
+      "Mock DHPT",
+      "DHPTx"
+    );
+
+    DHPTx = await sf.loadSuperToken(DHPTxAddr);
+
+    await mockPool.setIsDepositAsset(USDC.address, true);
+    await mockPool.setIsDepositAsset(DAI.address, true);
+    await mockPool.setDepositAssets([USDC.address, DAI.address]);
+
     dHedgeCoreCreatorFactory = await ethers.getContractFactory(
       "dHedgeCoreFactory",
       {
@@ -147,26 +122,33 @@ describe("3-Index Approach Testing", function () {
     factory = await dHedgeCoreCreatorFactory.deploy(DAO.address, "20000");
 
     await factory.deployed();
-    await registerAppByFactory(factory.address);
+    // await registerAppByFactory(factory.address);
 
-    await factory.createdHedgeCore(Pool1, DHPTx.address);
+    // await mockPool.mock.increaseAllowance.returns(true);
+    await factory.createdHedgeCore(mockPool.address, DHPTx.address);
 
-    newCore = await factory.cores(Pool1);
+    newCore = await factory.cores(mockPool.address);
 
     app = await ethers.getContractAt("dHedgeCore", newCore);
 
-    await app.initStreamToken(USDC.superToken);
-    await app.initStreamToken(DAI.superToken);
+    await app.initStreamToken(USDCx.address);
+    await app.initStreamToken(DAIx.address);
 
     await approveAndUpgrade();
   }
 
-  async function createSuperToken(underlyingAddress) {
+  async function createSuperToken(
+    superTokenFactoryAddr,
+    underlyingAddress,
+    decimals,
+    name,
+    symbol
+  ) {
     superTokenFactoryABI = [
-      "function createERC20Wrapper(address, uint8, string, string) external returns(address)",
+      "function createERC20Wrapper(address, uint8, uint8, string, string) external returns(address)",
       "event SuperTokenCreated(address indexed token)",
     ];
-    superTokenFactoryAddr = await host.getSuperTokenFactory();
+    // superTokenFactoryAddr = await host.getSuperTokenFactory();
     superTokenFactory = await ethers.getContractAt(
       superTokenFactoryABI,
       superTokenFactoryAddr,
@@ -175,14 +157,16 @@ describe("3-Index Approach Testing", function () {
 
     await superTokenFactory.createERC20Wrapper(
       underlyingAddress,
+      decimals,
       1,
-      "dHEDGE Stablecoin Yield",
-      "dUSDx"
+      name,
+      symbol
     );
-    superTokenFilter = await superTokenFactory.filters.SuperTokenCreated();
+
+    superTokenFilter = superTokenFactory.filters.SuperTokenCreated();
     response = await superTokenFactory.queryFilter(
       superTokenFilter,
-      -1,
+      "latest",
       "latest"
     );
 
@@ -190,16 +174,17 @@ describe("3-Index Approach Testing", function () {
   }
 
   async function approveAndUpgrade() {
-    await USDCContract.connect(USDCWhale).approve(
-      USDC.superToken,
-      parseUnits("1000000", 6)
+    await USDC.mint(USDCWhale.address, parseUnits("1000000", 6));
+    await DAI.mint(DAIWhale.address, parseUnits("1000000", 18));
+    await DAI.mint(DAIWhale2.address, parseUnits("1000000", 18));
+
+    await USDC.connect(USDCWhale).approve(
+      USDCx.address,
+      parseUnits("100000", 6)
     );
-    await DAIContract.connect(DAIWhale).approve(
-      DAI.superToken,
-      parseUnits("1000000", 18)
-    );
-    await DAIContract.connect(DAIWhale2).approve(
-      DAI.superToken,
+    await DAI.connect(DAIWhale).approve(DAIx.address, parseUnits("100000", 18));
+    await DAI.connect(DAIWhale2).approve(
+      DAIx.address,
       parseUnits("1000000", 18)
     );
 
@@ -245,12 +230,12 @@ describe("3-Index Approach Testing", function () {
 
   async function startAndSub(wallet, tokenObj, userFlowRate) {
     createFlowOp = sf.cfaV1.createFlow({
-      superToken: tokenObj.superToken,
+      superToken: tokenObj[1],
       receiver: app.address,
       flowRate: userFlowRate,
     });
 
-    tokenDistObj = await app.getTokenDistIndices(tokenObj.token);
+    tokenDistObj = await app.getTokenDistIndices(tokenObj[0]);
 
     tokenDistIndex =
       tokenDistObj[3] === tokenDistObj[0] ? tokenDistObj[1] : tokenDistObj[0];
@@ -267,49 +252,18 @@ describe("3-Index Approach Testing", function () {
     await sf.batchCall([createFlowOp, approveOp]).exec(wallet);
   }
 
-  async function registerAppByFactory(factoryAddr) {
-    governance = await host.getGovernance();
-
-    sfGovernanceRO = await ethers.getContractAt(
-      SuperfluidGovernanceBase.abi,
-      governance
-    );
-
-    govOwner = await sfGovernanceRO.owner();
-    [govOwnerSigner] = await impersonateAccounts([govOwner]);
-
-    sfGovernance = await ethers.getContractAt(
-      SuperfluidGovernanceBase.abi,
-      governance,
-      govOwnerSigner
-    );
-
-    await sfGovernance.authorizeAppFactory(SFConfig.hostAddress, factoryAddr);
-  }
-
-  // async function printDHPTxBalance(accountAddr) {
-  //   currDHPTxBal = await DHPTx.balanceOf({
-  //     account: accountAddr,
-  //     providerOrSigner: ethersProvider,
-  //   });
-
-  //   console.log(`Current DHPTx balance of ${accountAddr}: ${currDHPTxBal}`);
-
-  //   return currDHPTxBal;
-  // }
-
   it("Should assign correct indices", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
     USDCWhaleRes = await sf.idaV1.getSubscription({
       superToken: DHPTx.address,
       publisher: app.address,
       indexId: 1,
-      subscriber: USDCWhaleAddr,
+      subscriber: USDCWhale.address,
       providerOrSigner: ethersProvider,
     });
 
@@ -317,13 +271,15 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(1);
 
-    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
 
     adminRes = await sf.idaV1.getSubscription({
       superToken: DHPTx.address,
@@ -337,8 +293,8 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhaleAddr,
+        superToken: USDCx.address,
+        sender: USDCWhale.address,
         receiver: app.address,
       })
       .exec(USDCWhale);
@@ -347,19 +303,19 @@ describe("3-Index Approach Testing", function () {
       superToken: DHPTx.address,
       publisher: app.address,
       indexId: 1,
-      subscriber: USDCWhaleAddr,
+      subscriber: USDCWhale.address,
       providerOrSigner: ethersProvider,
     });
 
     expect(USDCWhaleRes.exist).to.equal(false);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     USDCWhaleRes = await sf.idaV1.getSubscription({
       superToken: DHPTx.address,
       publisher: app.address,
       indexId: tokenDistIndexObj[2],
-      subscriber: USDCWhaleAddr,
+      subscriber: USDCWhale.address,
       providerOrSigner: ethersProvider,
     });
 
@@ -367,11 +323,13 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, constants.Zero);
+
+    await app.distribute(USDC.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: admin.address,
         receiver: app.address,
       })
@@ -387,13 +345,13 @@ describe("3-Index Approach Testing", function () {
 
     expect(adminRes.exist).to.equal(false);
 
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
     USDCWhaleRes = await sf.idaV1.getSubscription({
       superToken: DHPTx.address,
       publisher: app.address,
       indexId: 2,
-      subscriber: USDCWhaleAddr,
+      subscriber: USDCWhale.address,
       providerOrSigner: ethersProvider,
     });
 
@@ -401,20 +359,24 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(2);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhaleAddr,
+        superToken: USDCx.address,
+        sender: USDCWhale.address,
         receiver: app.address,
       })
       .exec(USDCWhale);
@@ -423,7 +385,7 @@ describe("3-Index Approach Testing", function () {
       superToken: DHPTx.address,
       publisher: app.address,
       indexId: 2,
-      subscriber: USDCWhaleAddr,
+      subscriber: USDCWhale.address,
       providerOrSigner: ethersProvider,
     });
 
@@ -435,9 +397,9 @@ describe("3-Index Approach Testing", function () {
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[0]).to.equal(1);
     expect(tokenDistIndexObj[1]).to.equal(2);
@@ -445,19 +407,25 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(1);
 
-    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(2);
   });
@@ -475,38 +443,44 @@ describe("3-Index Approach Testing", function () {
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     // The user will now be assigned index 1
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
 
-    await increaseTime(getSeconds(1));
+    // await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
@@ -530,30 +504,34 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(DHPTBalance2.add(DHPTBalance1), parseUnits("0.001", 18));
 
-    await increaseTime(getSeconds(1));
+    // await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhaleAddr,
+        superToken: USDCx.address,
+        sender: USDCWhale.address,
         receiver: app.address,
       })
       .exec(USDCWhale);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     await sf.idaV1
       .approveSubscription({
@@ -565,11 +543,13 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(
@@ -600,19 +580,21 @@ describe("3-Index Approach Testing", function () {
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     // The user will now be assigned index 1
-    await startAndSub(USDCWhale, USDC, userFlowRate);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
@@ -636,23 +618,27 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.dHedgeDeposit(USDC.address);
+
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
 
-    tokenDistIndexObj = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
-        sender: USDCWhaleAddr,
+        superToken: USDCx.address,
+        sender: USDCWhale.address,
         receiver: app.address,
       })
       .exec(USDCWhale);
@@ -667,13 +653,15 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
 
     userFlowRate = parseUnits("60", 18).div(getBigNumber(getSeconds(30)));
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(DHPTBalance2.add(DHPTBalance1), parseUnits("0.001", 18));
@@ -706,26 +694,30 @@ describe("3-Index Approach Testing", function () {
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(admin, USDC, userFlowRate);
-    await startAndSub(admin, DAI, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
+    await startAndSub(admin, [DAI.address, DAIx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
-    await app.dHedgeDeposit(DAIContract.address);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    DHPTBalance1 = await DHPT.balanceOf(app.address);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(1);
     expect(tokenDistIndexObjDAI[3]).to.equal(4);
 
-    DHPTBalance1 = await DHPT.balanceOf(app.address);
-
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
-    await app.distribute(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
+    await app.distribute(DAI.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -734,8 +726,8 @@ describe("3-Index Approach Testing", function () {
       })
     ).to.be.closeTo(DHPTBalance1, parseUnits("0.001", 18));
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(1);
     expect(tokenDistIndexObjDAI[3]).to.equal(4);
@@ -744,7 +736,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
@@ -752,7 +744,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: DAI.superToken,
+        superToken: DAIx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
@@ -760,15 +752,20 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
-    await app.dHedgeDeposit(DAI.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
-    await app.distribute(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
+    await app.distribute(DAI.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -779,14 +776,16 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
-    await app.dHedgeDeposit(DAI.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: admin.address,
         receiver: app.address,
       })
@@ -794,14 +793,14 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: DAI.superToken,
+        superToken: DAIx.address,
         sender: admin.address,
         receiver: app.address,
       })
       .exec(admin);
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     await sf.idaV1
       .approveSubscription({
@@ -821,8 +820,10 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
-    await app.distribute(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
+    await app.distribute(DAI.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -856,16 +857,18 @@ describe("3-Index Approach Testing", function () {
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(admin, USDC, userFlowRate);
-    await startAndSub(admin, DAI, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
+    await startAndSub(admin, [DAI.address, DAIx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
-    await app.dHedgeDeposit(DAIContract.address);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(1);
     expect(tokenDistIndexObjDAI[3]).to.equal(4);
@@ -874,8 +877,8 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(1);
     expect(tokenDistIndexObjDAI[3]).to.equal(4);
@@ -884,7 +887,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
@@ -892,14 +895,14 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: DAI.superToken,
+        superToken: DAIx.address,
         receiver: app.address,
         flowRate: userFlowRate,
       })
       .exec(admin);
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     await sf.idaV1
       .approveSubscription({
@@ -935,11 +938,15 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
-    await app.dHedgeDeposit(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(2);
     expect(tokenDistIndexObjDAI[3]).to.equal(5);
@@ -955,11 +962,15 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
-    await app.dHedgeDeposit(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    await app.dHedgeDeposit(DAI.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     expect(tokenDistIndexObjUSDC[3]).to.equal(2);
     expect(tokenDistIndexObjDAI[3]).to.equal(5);
@@ -975,7 +986,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: admin.address,
         receiver: app.address,
       })
@@ -983,14 +994,14 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: DAI.superToken,
+        superToken: DAIx.address,
         sender: admin.address,
         receiver: app.address,
       })
       .exec(admin);
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
-    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
+    tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
 
     await sf.idaV1
       .approveSubscription({
@@ -1010,8 +1021,10 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
-    await app.distribute(DAI.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+
+    await app.distribute(USDC.address);
+    await app.distribute(DAI.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -1046,22 +1059,24 @@ describe("3-Index Approach Testing", function () {
     userFlowRate1 = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
     userFlowRate2 = parseUnits("45", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(USDCWhale, USDC, userFlowRate1);
-    await startAndSub(admin, USDC, userFlowRate2);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate1);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate2);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(
@@ -1088,7 +1103,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate1,
       })
@@ -1096,7 +1111,7 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .updateFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         receiver: app.address,
         flowRate: userFlowRate2,
       })
@@ -1104,17 +1119,19 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(
@@ -1141,13 +1158,14 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: USDCWhale.address,
         receiver: app.address,
       })
@@ -1155,13 +1173,13 @@ describe("3-Index Approach Testing", function () {
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: admin.address,
         receiver: app.address,
       })
       .exec(admin);
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
 
     await sf.idaV1
       .approveSubscription({
@@ -1181,11 +1199,12 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
-        account: USDCWhaleAddr,
+        account: USDCWhale.address,
         providerOrSigner: ethersProvider,
       })
     ).to.be.closeTo(
@@ -1219,21 +1238,22 @@ describe("3-Index Approach Testing", function () {
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     // console.log("DHPT balance in contract: ", DHPTBalance1.toString());
 
-    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.token);
+    tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
 
     await sf.cfaV1
       .deleteFlow({
-        superToken: USDC.superToken,
+        superToken: USDCx.address,
         sender: admin.address,
         receiver: app.address,
       })
@@ -1249,7 +1269,8 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -1260,17 +1281,19 @@ describe("3-Index Approach Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(1));
 
-    await app.dHedgeDeposit(USDC.token);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await app.distribute(USDC.token);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.distribute(USDC.address);
 
     expect(
       await DHPTx.balanceOf({
@@ -1285,15 +1308,16 @@ describe("3-Index Approach Testing", function () {
 
     userFlowRate = parseUnits("100", 18).div(getBigNumber(getSeconds(30)));
 
-    await startAndSub(admin, USDC, userFlowRate);
+    await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
 
     await increaseTime(getSeconds(30));
 
-    balanceBefore = await USDCContract.balanceOf(DAO.address);
+    balanceBefore = await USDC.balanceOf(DAO.address);
 
-    await app.dHedgeDeposit(USDCContract.address);
+    await app.dHedgeDeposit(USDC.address);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-    balanceAfter = await USDCContract.balanceOf(DAO.address);
+    balanceAfter = await USDC.balanceOf(DAO.address);
 
     expect(balanceAfter.sub(balanceBefore)).to.be.closeTo(
       parseUnits("2", 6),

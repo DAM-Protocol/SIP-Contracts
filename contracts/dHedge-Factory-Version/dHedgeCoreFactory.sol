@@ -33,6 +33,8 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     mapping(address => address) public cores;
 
     constructor(address _dao, uint32 _defaultFeeRate) {
+        require(_dao != address(0), "DAO address null");
+
         implementation = address(new dHedgeCore());
         dao = _dao;
         defaultFeeRate = _defaultFeeRate;
@@ -44,6 +46,7 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
         address _implementation,
         string calldata _message
     ) external onlyOwner {
+        require(_implementation != address(0), "Implementation address null");
         implementation = _implementation;
 
         emit ImplementationChanged(_implementation, _message);
@@ -60,6 +63,7 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     /// @dev Sets DAO address for all cores.
     /// @param _dao New address for the DAO.
     function setDAOAddress(address _dao) external onlyOwner {
+        require(_dao != address(0), "DAO address null");
         dao = _dao;
 
         emit DAOAddressChanged(_dao);
@@ -73,6 +77,19 @@ contract dHedgeCoreFactory is IdHedgeCoreFactory, Ownable {
     {
         require(cores[_dHedgePool] == address(0), "Core already exists");
 
+        _createCore(_dHedgePool, _DHPTx);
+    }
+
+    function replacedHedgeCore(address _dHedgePool, ISuperToken _DHPTx)
+        external
+        onlyOwner
+    {
+        require(cores[_dHedgePool] != address(0), "Core doesn't exist");
+
+        _createCore(_dHedgePool, _DHPTx);
+    }
+
+    function _createCore(address _dHedgePool, ISuperToken _DHPTx) internal {
         address newCore = Clones.clone(implementation);
 
         dHedgeCore(newCore).initialize(_dHedgePool, _DHPTx);

@@ -52,10 +52,10 @@ describe("3-Index Approach Revert Testing", function () {
 
   let sf, host;
   let USDCWhale, DAIWhale, DAIWhale2;
-  let DAIContract, USDCContract, DHPT;
+  let DAIContract, USDCContract;
   let USDCx, DAIx, DHPTx;
   let dHedgeHelper, dHedgeStorage, SFHelper;
-  let app, poolManager;
+  let app;
 
   before(async () => {
     [USDCWhale, DAIWhale, DAIWhale2, dHEDGEOwner] = await impersonateAccounts([

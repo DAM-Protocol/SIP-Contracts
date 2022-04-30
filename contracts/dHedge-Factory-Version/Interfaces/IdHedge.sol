@@ -12,7 +12,7 @@ interface IPoolLogic {
 
     /// @notice Withdraw assets based on the fund token amount
     /// @param _fundTokenAmount the fund token amount
-    function withdraw(uint256 _fundTokenAmount) external;
+    // function withdraw(uint256 _fundTokenAmount) external;
 
     /// @notice Pool manager logic address for a pool
     function poolManagerLogic() external view returns (address);
@@ -26,14 +26,14 @@ interface IPoolLogic {
 }
 
 interface IPoolManagerLogic {
-    struct Asset {
-        address asset;
-        bool isDeposit;
-    }
+    // struct Asset {
+    //     address asset;
+    //     bool isDeposit;
+    // }
 
     /// @notice Get all the supported assets
     /// @return Return array of supported assets
-    function getSupportedAssets() external view returns (Asset[] memory);
+    // function getSupportedAssets() external view returns (Asset[] memory);
 
     /// @notice Get all the deposit assets
     /// @return Return array of deposit assets' addresses
@@ -41,7 +41,7 @@ interface IPoolManagerLogic {
 
     /// @notice Return true if it's supported asset, false otherwise
     /// @param asset address of the asset
-    function isSupportedAsset(address asset) external view returns (bool);
+    // function isSupportedAsset(address asset) external view returns (bool);
 
     /// @notice Return true if it's deposit asset, false otherwise
     /// @param asset address of the asset
