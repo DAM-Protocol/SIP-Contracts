@@ -12,15 +12,17 @@ const {
   increaseTime,
 } = require("../../helpers/helpers");
 const { constants } = require("ethers");
+const ConstantFlowAgreementV1 = require("@superfluid-finance/ethereum-contracts/build/contracts/ConstantFlowAgreementV1.json");
 
-describe("3-Index Approach Revert Testing", function () {
+
+describe("Upkeep Mock Testing", function () {
   const [admin, DAO, USDCWhale, DAIWhale, DAIWhale2] = provider.getWallets();
   const ethersProvider = provider;
 
   // const WBTCxAddr = "0x4086eBf75233e8492F1BCDa41C7f2A8288c2fB92";
   // const WBTCAddr = "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6";
 
-  let sf, resolverAddress, superTokenFactory;
+  let sf, resolverAddress, superTokenFactory, CFAAddress, CFAV1;
   // let USDCWhale, DAIWhale, DAIWhale2;
   let DAI, USDC, WBTC, DHPT;
   let mockPool, mockPoolFactory;
@@ -29,7 +31,7 @@ describe("3-Index Approach Revert Testing", function () {
   let app;
 
   before(async () => {
-    [resolverAddress, , , superTokenFactory] = await deploySuperfluid(admin);
+    [resolverAddress, CFAAddress, , superTokenFactory] = await deploySuperfluid(admin);
 
     sf = await Framework.create({
       networkName: "hardhat",
@@ -74,6 +76,8 @@ describe("3-Index Approach Revert Testing", function () {
     DAIx = await sf.loadSuperToken(DAIxAddr);
     USDCx = await sf.loadSuperToken(USDCxAddr);
     WBTCx = await sf.loadSuperToken(WBTCxAddr);
+
+    CFAV1 = await ethers.getContractAt(ConstantFlowAgreementV1.abi, CFAAddress);
 
     SFHelperFactory = await ethers.getContractFactory("SFHelper");
     SFHelper = await SFHelperFactory.deploy();
@@ -256,143 +260,104 @@ describe("3-Index Approach Revert Testing", function () {
     await sf.batchCall([createFlowOp, approveOp]).exec(wallet);
   }
 
-  context("should not re-initialise a supertoken", function () {
-    it("if the supertoken is already initialised", async () => {
-      await loadFixture(setupEnv);
+  /**
+   * This test is for the function `emergencyCloseStream` in `dHedgeCore` contract.
+   * The logic for the function resides in `SFHelper` contract.
+   * This function should only close a user's stream if they don't have enough liquidity to
+   * last for more than 12 hours.
+   * @dev Ideally we would have liked to test for app jail scenario but by design, it shouldn't fail.
+   * Maybe we can create a mock contract which can be jailed and then test if this function works ?
+   */
+  it("Should be able to close a stream if user is low on supertokens", async () => {
+    await loadFixture(setupEnv);
 
-      await expect(app.initStreamToken(USDCx.address)).to.be.revertedWith(
-        "dHedgeHelper: Token already present"
-      );
-    });
+    userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
 
-    it("if token is not a deposit asset", async () => {
-      await loadFixture(setupEnv);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
-      await expect(app.initStreamToken(WBTCx.address)).to.be.revertedWith(
-        "dHedgeHelper: Not deposit asset"
-      );
-    });
+    // Increase time by 29 and a half days.
+    await increaseTime(getSeconds(29.5));
+
+    await app.emergencyCloseStream(USDCx.address, USDCWhale.address);
+
+    // result = await app.calcUserUninvested(USDCWhale.address, DAIx.address);
+    // console.log("Get flow result: ", result);
   });
 
-  context("should not deposit tokens into the dHEDGE pool", function () {
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
+  /**
+   * This test is for the function `emergencyCloseStream` in `dHedgeCore` contract.
+   * The logic for the function resides in `SFHelper` contract.
+   * This function should only close a user's stream if they don't have enough liquidity to
+   * last for more than 12 hours.
+   */
+  it("should not close a stream if user has enough supertokens (more than or equal to 12 hours worth)", async () => {
+    await loadFixture(setupEnv);
 
-    it("if no streams exist", async () => {
-      await loadFixture(setupEnv);
+    userFlowRate = parseUnits("9000", 18).div(getBigNumber(getSeconds(30)));
 
-      await expect(app.dHedgeDeposit(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: Deposit not required"
-      );
+    // DAIWhale has a balance of 9000 DAIx before start of the stream and after a day of streaming
+    // the balance should still be sufficient to last the stream for more than 12 hours
+    await startAndSub(DAIWhale, [DAI.address, DAIx.address], userFlowRate);
 
-      // User starts a stream but terminates it without any deposit taking place.
-      // In such a case, no supertokens should be left in the contract corresponding to the user.
-      // Hence, no deposit is required.
-      await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
+    // Increase time by a day
+    await increaseTime(getSeconds(1));
 
-      await increaseTime(getSeconds(1));
-
-      await sf.cfaV1
-        .deleteFlow({
-          superToken: USDCx.address,
-          sender: USDCWhale.address,
-          receiver: app.address,
-        })
-        .exec(USDCWhale);
-
-      await expect(app.dHedgeDeposit(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: Deposit not required"
-      );
-    });
-
-    it("if already deposited", async () => {
-      await loadFixture(setupEnv);
-
-      await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
-
-      await increaseTime(getSeconds(1));
-
-      await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
-      await expect(app.dHedgeDeposit(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: Deposit not required"
-      );
-    });
-
-    it("should revert if token is not deposit asset", async () => {
-      await loadFixture(setupEnv);
-
-      await expect(app.dHedgeDeposit(WBTCx.address)).to.be.revertedWith(
-        "dHedgeHelper: Deposit not required"
-      );
-    });
+    await expect(
+      app.emergencyCloseStream(DAIx.address, DAIWhale.address)
+    ).to.be.revertedWith("SFHelper: No emergency close");
   });
 
-  context("should not distribute tokens", function () {
+  it("should return correct token(s) to deposit (requireUpkeep)", async () => {
+    await loadFixture(setupEnv);
+
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
-    it("if no streams exist", async () => {
-      await loadFixture(setupEnv);
+    // result = await app.calcUserUninvested(DAIWhale.address, DAIx.address);
+    // console.log("Get flow result: ", result);
 
-      await expect(app.distribute(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: No amount to distribute"
-      );
-    });
+    // result = await CFAV1.getFlow(DAIx.address`, DAIWhale.address, app.address);
+    // console.log("Get flow result: ", result);`
 
-    it("if trying to distribute a token twice (single token streaming)", async () => {
-      await loadFixture(setupEnv);
+    await startAndSub(DAIWhale, [DAI.address, DAIx.address], userFlowRate);
 
-      await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
+    // Increase time by a day
+    await increaseTime(getSeconds(1));
 
-      await increaseTime(getSeconds(1));
+    token1 = await app.requireUpkeep();
 
-      await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    expect(token1).to.equal(DAI.address);
 
-      await increaseTime(getSeconds(1));
+    await app.dHedgeDeposit(token1);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-      await mockPool.setExitRemainingCooldown(app.address, "0");
-      await app.distribute(USDC.address);
+    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
-      await expect(app.distribute(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: No amount to distribute"
-      );
-    });
+    await increaseTime(getSeconds(1));
 
-    it("if trying to distribute a token twice (multiple tokens streaming)", async () => {
-      await loadFixture(setupEnv);
+    token2 = await app.requireUpkeep();
 
-      await startAndSub(admin, [USDC.address, USDCx.address], userFlowRate);
-      await startAndSub(admin, [DAI.address, DAIx.address], userFlowRate);
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.dHedgeDeposit(token2);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-      await increaseTime(getSeconds(1));
+    token3 = await app.requireUpkeep();
 
-      await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-      await app.dHedgeDeposit(DAI.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
+    expect(token2).to.not.equal(token3);
 
-      await increaseTime(getSeconds(1));
+    await mockPool.setExitRemainingCooldown(app.address, "0");
+    await app.dHedgeDeposit(token3);
+    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
-      await mockPool.setExitRemainingCooldown(app.address, "0");
-      await app.distribute(USDC.address);
-      await app.distribute(DAI.address);
+    token4 = await app.requireUpkeep();
 
-      await expect(app.distribute(USDC.address)).to.be.revertedWith(
-        "dHedgeHelper: No amount to distribute"
-      );
+    expect(token4).to.equal(constants.AddressZero);
 
-      await expect(app.distribute(DAI.address)).to.be.revertedWith(
-        "dHedgeHelper: No amount to distribute"
-      );
-    });
+    await increaseTime(getSeconds(1));
 
-    it("if token is not initialised and not a deposit asset", async () => {
-      await loadFixture(setupEnv);
+    await app.deactivateCore("Testing");
 
-      await expect(app.distribute(WBTC.address)).to.be.revertedWith(
-        "dHedgeHelper: No amount to distribute"
-      );
-    });
+    token5 = await app.requireUpkeep();
+
+    expect(token5).to.equal(constants.AddressZero);
   });
 });

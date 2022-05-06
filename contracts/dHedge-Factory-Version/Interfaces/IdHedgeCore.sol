@@ -32,7 +32,7 @@ interface IdHedgeCore {
             uint32
         );
 
-    function calcUserUninvested(address _user, address _token)
+    function calcUserUninvested(address _user, ISuperToken _superToken)
         external
         view
         returns (uint256);

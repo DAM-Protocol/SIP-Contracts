@@ -245,14 +245,14 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementCreated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after creation of a stream (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
+    /// @param _superToken Underlying token of the supertoken.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
-    /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementCreated` hook.
     function afterAgreementCreated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
+        ISuperToken _superToken,
         address _agreementClass,
-        address _underlyingToken,
         bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
@@ -270,10 +270,10 @@ library dHedgeHelper {
                 _agreementData,
                 (address, address)
             );
+            address _underlyingToken = _superToken.getUnderlyingToken();
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
-            ISuperToken _superToken = tokenData.superToken;
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
             // Select the active index ID.
@@ -312,14 +312,14 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementUpdated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after updation of stream rate (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
+    /// @param _superToken Underlying token of the supertoken.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
-    /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementUpdated` hook.
     function afterAgreementUpdated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
+        ISuperToken _superToken,
         address _agreementClass,
-        address _underlyingToken,
         bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
@@ -336,10 +336,10 @@ library dHedgeHelper {
                 _agreementData,
                 (address, address)
             );
+            address _underlyingToken = _superToken.getUnderlyingToken();
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
-            ISuperToken _superToken = tokenData.superToken;
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
             uint32 _lockedIndexId = tokenData.lockedIndexId;
@@ -398,14 +398,14 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementTerminated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after termination of the stream (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
+    /// @param _superToken Underlying token of the supertoken.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
-    /// @param _underlyingToken Underlying token of the supertoken.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementTerminated` hook.
     function afterAgreementTerminated(
         dHedgeStorage.dHedgePool storage _dHedgePool,
+        ISuperToken _superToken,
         address _agreementClass,
-        address _underlyingToken,
         bytes memory _agreementData,
         bytes memory _ctx,
         bytes memory _cbdata
@@ -422,12 +422,11 @@ library dHedgeHelper {
                 _agreementData,
                 (address, address)
             );
+            address _underlyingToken = _superToken.getUnderlyingToken();
             dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
                 _underlyingToken
             ];
-            // ISuperToken _DHPTx = _dHedgePool.DHPTx;
             uint32 _assignedIndex = tokenData.assignedIndex[_sender];
-
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             // If assigned index is currently locked then we will have to initiate index migration (detailed below).
@@ -435,7 +434,6 @@ library dHedgeHelper {
                 tokenData.distAmount != 0 &&
                 _assignedIndex == tokenData.lockedIndexId
             ) {
-                /// @dev TODO check this.
                 _newCtx = _migrateIndex(
                     tokenData,
                     _dHedgePool.DHPTx,
@@ -472,18 +470,18 @@ library dHedgeHelper {
             delete tokenData.assignedIndex[_sender];
 
             /// @dev We can directly transfer the amount instead of using `_transferBuffer`.
-            _transferBuffer(tokenData.superToken, _sender, 0, _userUninvested);
+            _transferBuffer(_superToken, _sender, 0, _userUninvested);
         }
     }
 
     /// Helper function that's called before streams are updated or terminated.
+    /// @param _superToken Underlying token of the supertoken.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
-    /// @param _underlyingToken Underlying token of the supertoken.
     /// @return _cbdata Callback data that needs to be passed on to after agreement hooks.
     function beforeAgreement(
         dHedgeStorage.dHedgePool storage _dHedgePool,
+        ISuperToken _superToken,
         address _agreementClass,
-        address _underlyingToken,
         bytes memory _agreementData
     )
         external
@@ -506,7 +504,7 @@ library dHedgeHelper {
 
             // Encode the uninvested amount. We calculate it before modifying the stream rate.
             _cbdata = abi.encode(
-                calcUserUninvested(_dHedgePool, _user, _underlyingToken)
+                calcUserUninvested(_dHedgePool, _user, _superToken)
             );
         }
     }
@@ -602,19 +600,22 @@ library dHedgeHelper {
     /// Function to calculate uninvested amount of a user to return that after stream updation/termination.
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
     /// @param _user Address of the user whose uninvested amount has to be calculated.
-    /// @param _depositToken Address of the underlying token (deposit token and not the supertoken).
+    /// @param _superToken Address of the underlying token (deposit token and not the supertoken).
     /// @return Amount representing user's uninvested amount.
     function calcUserUninvested(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _user,
-        address _depositToken
+        ISuperToken _superToken
     ) public view returns (uint256) {
+        /// @dev Note: when no streams are present then tokenData[_depositToken] returns null address.
         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
-            _depositToken
+            _superToken.getUnderlyingToken()
         ];
 
+        if (address(tokenData.superToken) == address(0)) return 0;
+
         return
-            tokenData.superToken.calcUserUninvested(
+            _superToken.calcUserUninvested(
                 _user,
                 (tokenData.assignedIndex[_user] ==
                     tokenData.permDistIndex1.indexId)

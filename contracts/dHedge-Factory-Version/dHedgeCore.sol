@@ -66,22 +66,22 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     }
 
     /// Converts supertokens to underlying tokens and deposits them into dHedge pool.
-    /// @param _token Address of the underlying token to be deposited into dHedge pool.
-    function dHedgeDeposit(address _token) external override {
+    /// @param _underlyingToken Address of the underlying token to be deposited into dHedge pool.
+    function dHedgeDeposit(address _underlyingToken) external override {
         _onlyActive();
-        poolData.deposit(_token);
+        poolData.deposit(_underlyingToken);
     }
 
     /// Distributes the DHPTx corresponding to a underlying token's deposits.
-    /// @param _token Address of the underlying token.
-    function distribute(address _token) external {
+    /// @param _underlyingToken Address of the underlying token.
+    function distribute(address _underlyingToken) external {
         _onlyActive();
-        poolData.distribute(_token);
+        poolData.distribute(_underlyingToken);
     }
 
     /// Function to withdraw a token in case of emergency.
-    /// @param _token Address of the pool token.
-    /// TODO Remove/Modify this function after testing
+    /// @param _token Address of any token in this contract.
+    /// @dev TODO Remove/Modify this function after testing
     function emergencyWithdraw(address _token) external {
         _onlyOwner(msg.sender);
         IERC20(_token).safeTransfer(
@@ -114,7 +114,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         emit CoreReactivated(_message);
     }
 
-    /// Closes a supertoken stream if core is jailed or user is running low on balance.
+    /// Closes a supertoken stream if the core is jailed or user is running low on balance.
     /// Any user's stream can be closed by anyone provided the app is jailed-
     /// or user doesn't have enough amount to stream for more than 12 hours.
     /// @param _superToken Supertoken being streamed.
@@ -132,20 +132,13 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.isActive;
     }
 
-    // /// Gets the latest distribution index created.
-    // /// This function can also be used to get number of tokens supported by this dHedgeCore.
-    // /// @return Number corresponding to the latest created index.
-    // function getLatestDistIndex() external view override returns (uint32) {
-    //     return poolData.latestDistIndex;
-    // }
-
     /// Gets the distribution indices corresponding to an underlying token.
-    /// @param _token Address of a deposit token.
+    /// @param _underlyingToken Address of a deposit token.
     /// @return Index ID of first permanent index.
     /// @return Index ID of second permanent index.
     /// @return Index ID of temporary index.
     /// @return Index ID of the locked index.
-    function getTokenDistIndices(address _token)
+    function getTokenDistIndices(address _underlyingToken)
         external
         view
         override
@@ -156,41 +149,43 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             uint32
         )
     {
-        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[_token];
-        if (address(tokenData.superToken) != address(0))
-            return (
-                tokenData.permDistIndex1.indexId,
-                tokenData.permDistIndex2.indexId,
-                tokenData.tempDistIndex,
-                tokenData.lockedIndexId
-            );
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+            _underlyingToken
+        ];
 
-        return (0, 0, 0, 0);
+        if (address(tokenData.superToken) == address(0)) return (0, 0, 0, 0);
+
+        return (
+            tokenData.permDistIndex1.indexId,
+            tokenData.permDistIndex2.indexId,
+            tokenData.tempDistIndex,
+            tokenData.lockedIndexId
+        );
     }
-    
+
     /// Gets a user's assigned permanent distribution index for a supertoken stream.
     /// @param _user Address of the user.
-    /// @param _token Address of the underlying token for which the permanent distribution index ID is required.
+    /// @param _underlyingToken Address of the underlying token for which the permanent distribution index ID is required.
     /// @return Assigned permanent distribution index ID.
-    function getUserDistIndex(address _user, address _token)
+    function getUserDistIndex(address _user, address _underlyingToken)
         external
         view
         returns (uint32)
     {
-        return poolData.tokenData[_token].assignedIndex[_user];
+        return poolData.tokenData[_underlyingToken].assignedIndex[_user];
     }
 
     /// Calculates uninvested token amount of a particular user.
     /// @param _user Address of the user whose uninvested amount needs to be calculated.
-    /// @param _token Address of the underlying token.
+    /// @param _superToken Address of the supertoken.
     /// @return Amount of uninvested tokens.
-    function calcUserUninvested(address _user, address _token)
+    function calcUserUninvested(address _user, ISuperToken _superToken)
         public
         view
         override
         returns (uint256)
     {
-        return poolData.calcUserUninvested(_user, _token);
+        return poolData.calcUserUninvested(_user, _superToken);
     }
 
     /// Checks if deposit action can be performed.
@@ -216,7 +211,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     /**************************************************************************
      * SuperApp callbacks
      *************************************************************************/
-    
+
     /// @dev TODO Check if `_onlyExpected` is even required.
     function beforeAgreementCreated(
         ISuperToken _superToken,
@@ -252,10 +247,9 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         SFHelper._onlyHost();
         _newCtx = _ctx;
 
-
         _newCtx = poolData.afterAgreementCreated(
+            _superToken,
             _agreementClass,
-            _superToken.getUnderlyingToken(),
             _agreementData,
             _newCtx,
             _cbdata
@@ -273,8 +267,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         _onlyActive();
 
         _cbdata = poolData.beforeAgreement(
+            _superToken,
             _agreementClass,
-            _superToken.getUnderlyingToken(),
             _agreementData
         );
     }
@@ -291,8 +285,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         _newCtx = _ctx;
 
         _newCtx = poolData.afterAgreementUpdated(
+            _superToken,
             _agreementClass,
-            _superToken.getUnderlyingToken(),
             _agreementData,
             _newCtx,
             _cbdata
@@ -310,8 +304,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
         try
             poolData.beforeAgreement(
+                _superToken,
                 _agreementClass,
-                _superToken.getUnderlyingToken(),
                 _agreementData
             )
         returns (bytes memory _newCbData) {
@@ -335,8 +329,8 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
 
         try
             poolData.afterAgreementTerminated(
+                _superToken,
                 _agreementClass,
-                _superToken.getUnderlyingToken(),
                 _agreementData,
                 _newCtx,
                 _cbdata

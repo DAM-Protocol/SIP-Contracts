@@ -17,7 +17,7 @@ const { constants } = require("ethers");
 //   if (err) throw err;
 // };
 
-describe("3-Index Approach Testing", function () {
+describe("3-Index Approach Mock Testing", function () {
   const [admin, DAO, USDCWhale, DAIWhale, DAIWhale2] = provider.getWallets();
   const ethersProvider = provider;
 

@@ -29,13 +29,15 @@ library SFHelper {
     //     );
 
     // Addresses for local testing.
+    /// @dev Note: The addresses change for each test file. Don't run all the tests using `hh test`.
+    /// Run each test file individually after getting the address from the `SFSetup.js`.
     ISuperfluid public constant HOST =
-        ISuperfluid(0x0165878A594ca255338adfa4d48449f69242Eb8F);
+        ISuperfluid(0xF97f395dAb1F8f5936d51770F277c42a86DC1B99);
     IConstantFlowAgreementV1 public constant CFA_V1 =
-        IConstantFlowAgreementV1(0x610178dA211FEF7D417bC0e6FeD39F05609AD788);
+        IConstantFlowAgreementV1(0x488b54Cf1b3F65Fa0cf76889ccb78afD2a054f4E);
     IInstantDistributionAgreementV1 public constant IDA_V1 =
         IInstantDistributionAgreementV1(
-            0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
+            0x94a4d8C45FBaC4cCDD0afAebD0C006d97cfA8b6c
         );
 
     /// Function to distribute a supertoken amount according to an index.
@@ -292,12 +294,16 @@ library SFHelper {
         address _user,
         uint256 _lastDepositAt
     ) external view returns (uint256) {
+        // console.log("Reached calcUserUninvested");
+
         (
             ,
             /* uint256 _userPrevUpdateTimestamp */
             int96 _flowRate
         ) = getFlow(_superToken, _user);
         uint256 _userFlowRate = uint256(uint96(_flowRate));
+
+        // console.log("User flowrate: %s", _userFlowRate);
 
         return _userFlowRate * (block.timestamp - _lastDepositAt);
     }
@@ -312,6 +318,9 @@ library SFHelper {
         view
         returns (uint256 _timestamp, int96 _flowRate)
     {
+        // console.log("Reached getFlow");
+        // console.log("Supertoken: %s, Sender: %s, This: %s", address(_superToken), _sender, address(this));
+
         (_timestamp, _flowRate, , ) = CFA_V1.getFlow(
             _superToken,
             _sender,

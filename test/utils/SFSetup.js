@@ -77,6 +77,8 @@ async function deploySuperfluid(deployer) {
   ]);
   await host.initialize(governance.address);
 
+  console.log("Host address: ", host.address);
+
   // STEP 8
   // Register Superfluid with Resolver
   console.log("STEP 08: Register Superfluid with Resolver");
@@ -102,6 +104,8 @@ async function deploySuperfluid(deployer) {
     deployer,
     [host.address]
   );
+
+  console.log("CFA address: ", cfa.address);
 
   // STEP 11
   // Register ConstantFlowAgreementV1 agreement class with Governance
@@ -131,6 +135,8 @@ async function deploySuperfluid(deployer) {
       SlotsBitmapLibrary: slotsBitmapLibrary.address,
     }
   );
+
+  console.log("IDA address: ", ida.address);
 
   // STEP 14
   // Register InstantDistributionAgreementV1 agreement class with Governance

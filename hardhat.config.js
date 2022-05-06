@@ -44,7 +44,7 @@ module.exports = {
         url: process.env.POLYGON_NODE_URL,
         // blockNumber: 23736635,
         blockNumber: 25295628,
-        enabled: false,
+        enabled: true,
       },
       // accounts: [{privateKey: `0x${process.env.MAINNET_PRIVATE_KEY}`, balance: parseUnits("10000", 18).toString()}],
       saveDeployments: false,
