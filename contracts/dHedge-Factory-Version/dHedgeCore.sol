@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Libraries/dHedgeHelper.sol";
 import "./Libraries/dHedgeStorage.sol";
+import "./Libraries/dHedgeMath.sol";
 import "./Interfaces/IdHedgeCore.sol";
 import "./Interfaces/IdHedgeCoreFactory.sol";
 
@@ -28,8 +29,9 @@ import "hardhat/console.sol";
 // solhint-disable-next-line contract-name-camelcase
 contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     using SafeERC20 for IERC20;
-    using dHedgeHelper for dHedgeStorage.dHedgePool;
     using SFHelper for ISuperToken;
+    using dHedgeHelper for dHedgeStorage.dHedgePool;
+    using dHedgeMath for *;
 
     // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves.
     dHedgeStorage.dHedgePool private poolData;
@@ -186,6 +188,24 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         returns (uint256)
     {
         return poolData.calcUserUninvested(_user, _superToken);
+    }
+
+    function calcBufferTransferAmount(
+        address _user,
+        ISuperToken _superToken,
+        uint8 _streamAction,
+        int96 _flowRate
+    ) external view returns (uint256 _transferAmount, bool _isTaken) {
+        console.log("Gas used before: %s", gasleft());
+
+        (_transferAmount, _isTaken) = poolData.calcBufferTransferAmount(
+            _user,
+            _superToken,
+            _streamAction,
+            _flowRate
+        );
+
+        console.log("Gas used after: %s", gasleft());
     }
 
     /// Checks if deposit action can be performed.

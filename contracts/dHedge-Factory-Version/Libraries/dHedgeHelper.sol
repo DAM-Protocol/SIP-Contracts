@@ -5,6 +5,7 @@ import { IdHedgeCoreFactory } from "../Interfaces/IdHedgeCoreFactory.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./dHedgeStorage.sol";
+import "./dHedgeMath.sol";
 import "../../Common/SFHelper.sol";
 import { IERC20Mod } from "../../Common/IERC20Mod.sol";
 import "hardhat/console.sol";
@@ -22,6 +23,7 @@ import "hardhat/console.sol";
 library dHedgeHelper {
     using SafeERC20 for IERC20;
     using SFHelper for ISuperToken;
+    using dHedgeMath for *;
 
     event TokenInitialised(ISuperToken superToken, address token);
     event TokenDeposited(
@@ -371,7 +373,7 @@ library dHedgeHelper {
             // Initialise the `_currActiveIndex` if not already done (detailed further down).
             _initIndex(tokenData, _currActiveIndex);
 
-            // Modify user's assignes index as the current active index if not the same.
+            // Modify user's assigned index as the current active index if not the same.
             if (tokenData.assignedIndex[_sender] != _currActiveIndex)
                 tokenData.assignedIndex[_sender] = _currActiveIndex;
 
@@ -470,7 +472,12 @@ library dHedgeHelper {
             delete tokenData.assignedIndex[_sender];
 
             /// @dev We can directly transfer the amount instead of using `_transferBuffer`.
-            _transferBuffer(_superToken, _sender, 0, _userUninvested);
+            assert(_userUninvested <= _superToken.balanceOf(address(this)));
+
+            require(
+                _superToken.transfer(_sender, _userUninvested),
+                "dHedgeHelper: Buffer transfer failed"
+            );
         }
     }
 
@@ -504,7 +511,7 @@ library dHedgeHelper {
 
             // Encode the uninvested amount. We calculate it before modifying the stream rate.
             _cbdata = abi.encode(
-                calcUserUninvested(_dHedgePool, _user, _superToken)
+                _dHedgePool.calcUserUninvested(_user, _superToken)
             );
         }
     }
@@ -597,33 +604,6 @@ library dHedgeHelper {
         return false;
     }
 
-    /// Function to calculate uninvested amount of a user to return that after stream updation/termination.
-    /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @param _user Address of the user whose uninvested amount has to be calculated.
-    /// @param _superToken Address of the underlying token (deposit token and not the supertoken).
-    /// @return Amount representing user's uninvested amount.
-    function calcUserUninvested(
-        dHedgeStorage.dHedgePool storage _dHedgePool,
-        address _user,
-        ISuperToken _superToken
-    ) public view returns (uint256) {
-        /// @dev Note: when no streams are present then tokenData[_depositToken] returns null address.
-        dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
-            _superToken.getUnderlyingToken()
-        ];
-
-        if (address(tokenData.superToken) == address(0)) return 0;
-
-        return
-            _superToken.calcUserUninvested(
-                _user,
-                (tokenData.assignedIndex[_user] ==
-                    tokenData.permDistIndex1.indexId)
-                    ? tokenData.permDistIndex1.lastDepositAt
-                    : tokenData.permDistIndex2.lastDepositAt
-            );
-    }
-
     /// Wrapper function to check if an asset is accepted as deposit asset in a dHedge pool.
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
     /// @param _token Address of the underlying token to be deposited.
@@ -657,47 +637,71 @@ library dHedgeHelper {
         uint64 _lastDepositAt,
         uint256 _userUninvested
     ) private {
-        (, int96 _flowRate) = _superToken.getFlow(_sender);
-
-        assert(_userUninvested <= _superToken.balanceOf(address(this)));
-
-        // Calculate how much amount needs to be deposited upfront.
-        uint256 _depositAmount = (block.timestamp - _lastDepositAt) *
-            uint256(uint96(_flowRate));
+        (uint256 _amount, bool _isTaken) = _superToken
+            ._calcBufferTransferAmount(
+                _sender,
+                _lastDepositAt,
+                _userUninvested
+            );
 
         bool _success;
 
-        // If amount to be deposited is greater than user's uninvested amount then,
-        // transfer the difference from the user.
-        if (_depositAmount > _userUninvested) {
-            uint256 _amount = _depositAmount - _userUninvested;
+        if (_amount > 0) {
+            // If amount to be deposited is greater than user's uninvested amount then,
+            // transfer the difference from the user.
+            if (_isTaken) {
+                // console.log("Amount to be transferred from: ", _amount);
 
-            // console.log("Amount to be transferred from: ", _amount);
+                _success = _superToken.transferFrom(
+                    _sender,
+                    address(this),
+                    _amount
+                );
 
-            _success = _superToken.transferFrom(
-                _sender,
-                address(this),
-                _amount
-            );
+                emit UpfrontFeeDeposited(_superToken, _sender, _amount);
+            } else {
+                // Else if the amount to be deposited is lesser than the uninvested amount, transfer-
+                // the difference to the user.
+                
+                // console.log("Amount to be transferred to: ", _amount);
 
-            emit UpfrontFeeDeposited(_superToken, _sender, _amount);
-        } else if (_depositAmount < _userUninvested) {
-            // Else if the amount to be deposited is lesser than the uninvested amount, transfer-
-            // the difference to the user.
-            uint256 _amount = _userUninvested - _depositAmount;
+                _success = _superToken.transfer(_sender, _amount);
 
-            // console.log("Amount to be transferred to: ", _amount);
+                emit UpfrontFeeReturned(_superToken, _sender, _amount);
+            }
 
-            _success = _superToken.transfer(_sender, _amount);
-
-            emit UpfrontFeeReturned(_superToken, _sender, _amount);
-        } else {
-            // If `_depositAmount == _userUninvested` then technically no transfer should take place.
-            // This case can be reached for the very first streamer of a new supertoken.
-            _success = true;
+            require(_success, "dHedgeHelper: Buffer transfer failed");
         }
 
-        require(_success, "dHedgeHelper: Buffer transfer failed");
+        // // If amount to be deposited is greater than user's uninvested amount then,
+        // // transfer the difference from the user.
+        // if (_depositAmount > _userUninvested) {
+        //     uint256 _amount = _depositAmount - _userUninvested;
+
+        //     // console.log("Amount to be transferred from: ", _amount);
+
+        //     _success = _superToken.transferFrom(
+        //         _sender,
+        //         address(this),
+        //         _amount
+        //     );
+
+        //     emit UpfrontFeeDeposited(_superToken, _sender, _amount);
+        // } else if (_depositAmount < _userUninvested) {
+        //     // Else if the amount to be deposited is lesser than the uninvested amount, transfer-
+        //     // the difference to the user.
+        //     uint256 _amount = _userUninvested - _depositAmount;
+
+        //     // console.log("Amount to be transferred to: ", _amount);
+
+        //     _success = _superToken.transfer(_sender, _amount);
+
+        //     emit UpfrontFeeReturned(_superToken, _sender, _amount);
+        // } else {
+        //     // If `_depositAmount == _userUninvested` then technically no transfer should take place.
+        //     // This case can be reached for the very first streamer of a new supertoken.
+        //     _success = true;
+        // }
     }
 
     /// Function containing the logic to make a deposit into the dHEDGE pool.

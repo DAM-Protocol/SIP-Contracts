@@ -14,7 +14,6 @@ const {
 const { constants } = require("ethers");
 const ConstantFlowAgreementV1 = require("@superfluid-finance/ethereum-contracts/build/contracts/ConstantFlowAgreementV1.json");
 
-
 describe("Upkeep Mock Testing", function () {
   const [admin, DAO, USDCWhale, DAIWhale, DAIWhale2] = provider.getWallets();
   const ethersProvider = provider;
@@ -27,11 +26,13 @@ describe("Upkeep Mock Testing", function () {
   let DAI, USDC, WBTC, DHPT;
   let mockPool, mockPoolFactory;
   let USDCx, DAIx, WBTCx, DHPTx;
-  let dHedgeHelper, dHedgeStorage, SFHelper;
+  let dHedgeHelper, dHedgeStorage, dHedgeMath, SFHelper;
   let app;
 
   before(async () => {
-    [resolverAddress, CFAAddress, , superTokenFactory] = await deploySuperfluid(admin);
+    [resolverAddress, CFAAddress, , superTokenFactory] = await deploySuperfluid(
+      admin
+    );
 
     sf = await Framework.create({
       networkName: "hardhat",
@@ -87,9 +88,18 @@ describe("Upkeep Mock Testing", function () {
     dHedgeStorage = await dHedgeStorageFactory.deploy();
     await dHedgeStorage.deployed();
 
+    dHedgeMathFactory = await ethers.getContractFactory("dHedgeMath", {
+      libraries: {
+        SFHelper: SFHelper.address,
+      },
+    });
+    dHedgeMath = await dHedgeMathFactory.deploy();
+    await dHedgeMath.deployed();
+
     dHedgeHelperFactory = await ethers.getContractFactory("dHedgeHelper", {
       libraries: {
         SFHelper: SFHelper.address,
+        dHedgeMath: dHedgeMath.address,
       },
     });
     dHedgeHelper = await dHedgeHelperFactory.deploy();
@@ -123,6 +133,7 @@ describe("Upkeep Mock Testing", function () {
         libraries: {
           SFHelper: SFHelper.address,
           dHedgeHelper: dHedgeHelper.address,
+          dHedgeMath: dHedgeMath.address,
         },
         admin,
       }

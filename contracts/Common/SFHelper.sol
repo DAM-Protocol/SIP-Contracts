@@ -32,12 +32,12 @@ library SFHelper {
     /// @dev Note: The addresses change for each test file. Don't run all the tests using `hh test`.
     /// Run each test file individually after getting the address from the `SFSetup.js`.
     ISuperfluid public constant HOST =
-        ISuperfluid(0xF97f395dAb1F8f5936d51770F277c42a86DC1B99);
+        ISuperfluid(0x0165878A594ca255338adfa4d48449f69242Eb8F);
     IConstantFlowAgreementV1 public constant CFA_V1 =
-        IConstantFlowAgreementV1(0x488b54Cf1b3F65Fa0cf76889ccb78afD2a054f4E);
+        IConstantFlowAgreementV1(0x610178dA211FEF7D417bC0e6FeD39F05609AD788);
     IInstantDistributionAgreementV1 public constant IDA_V1 =
         IInstantDistributionAgreementV1(
-            0x94a4d8C45FBaC4cCDD0afAebD0C006d97cfA8b6c
+            0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
         );
 
     /// Function to distribute a supertoken amount according to an index.
@@ -284,30 +284,6 @@ library SFHelper {
             IDA_V1.getSubscription(_superToken, address(this), _index, _user);
     }
 
-    /// Calculates uninvested amount of a user.
-    /// @param _superToken Token being streamed.
-    /// @param _user Address of the user.
-    /// @param _lastDepositAt Last time a token was deposited to a dHEDGE pool.
-    /// @return _userUninvested User's uninvested amount.
-    function calcUserUninvested(
-        ISuperToken _superToken,
-        address _user,
-        uint256 _lastDepositAt
-    ) external view returns (uint256) {
-        // console.log("Reached calcUserUninvested");
-
-        (
-            ,
-            /* uint256 _userPrevUpdateTimestamp */
-            int96 _flowRate
-        ) = getFlow(_superToken, _user);
-        uint256 _userFlowRate = uint256(uint96(_flowRate));
-
-        // console.log("User flowrate: %s", _userFlowRate);
-
-        return _userFlowRate * (block.timestamp - _lastDepositAt);
-    }
-
     /// Function to get the flow rate of a user.
     /// @param _superToken Address of the supertoken.
     /// @param _sender Address of the user.
@@ -335,19 +311,4 @@ library SFHelper {
             "SFHelper: Supports only one host"
         );
     }
-
-    // /// Checks if the agreement is of type CFA or IDA.
-    // function _onlyExpected(address _agreementClass) internal view {
-    //     require(
-    //         ISuperAgreement(_agreementClass).agreementType() ==
-    //             keccak256(
-    //                 "org.superfluid-finance.agreements.ConstantFlowAgreement.v1"
-    //             ) ||
-    //             ISuperAgreement(_agreementClass).agreementType() ==
-    //             keccak256(
-    //                 "org.superfluid-finance.agreements.InstantDistributionAgreement.v1"
-    //             ),
-    //         "SFHelper: Callback called illegaly"
-    //     );
-    // }
 }
