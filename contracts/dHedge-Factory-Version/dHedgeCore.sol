@@ -196,16 +196,12 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         uint8 _streamAction,
         int96 _flowRate
     ) external view returns (uint256 _transferAmount, bool _isTaken) {
-        console.log("Gas used before: %s", gasleft());
-
         (_transferAmount, _isTaken) = poolData.calcBufferTransferAmount(
             _user,
             _superToken,
             _streamAction,
             _flowRate
         );
-
-        console.log("Gas used after: %s", gasleft());
     }
 
     /// Checks if deposit action can be performed.
