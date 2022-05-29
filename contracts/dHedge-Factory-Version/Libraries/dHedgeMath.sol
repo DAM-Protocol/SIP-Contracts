@@ -4,10 +4,18 @@ pragma solidity ^0.8.10;
 import { IERC20Mod } from "../../Common/IERC20Mod.sol";
 import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
+import "hardhat/console.sol";
 
 library dHedgeMath {
     using SFHelper for ISuperToken;
 
+    /// Function to calculate buffer transfer amount before stream creation/updation.
+    /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
+    /// @param _user Address of the user whose buffer transfer amount needs to be calculated.
+    /// @param _superToken The supertoken address whose stream needs to be created/updated.
+    /// @param _streamAction The type of stream modification (creation -> 1 and updation -> 2).
+    /// @param _delay Useful in case transaction times are high as extra allowance can be taken.
+    /// @param _flowRate Flow rate of the stream to be created/updated.
     /// @return The upfront fee to be taken or returned.
     /// @return Boolean representing if the upfront fee is taken or returned.
     function calcBufferTransferAmount(
@@ -15,6 +23,7 @@ library dHedgeMath {
         address _user,
         ISuperToken _superToken,
         uint8 _streamAction,
+        uint64 _delay,
         int96 _flowRate
     ) public view returns (uint256, bool) {
         address _underlyingToken = _superToken.getUnderlyingToken();
@@ -24,7 +33,8 @@ library dHedgeMath {
         uint256 _userUninvestedAmount = calcUserUninvested(
             _dHedgePool,
             _user,
-            _superToken
+            _superToken,
+            _delay
         );
 
         // If a new stream needs to be created, calculate the buffer transfer amount required.
@@ -43,8 +53,8 @@ library dHedgeMath {
 
             return
                 _calcBufferTransferAmount(
-                    _superToken,
                     index.lastDepositAt,
+                    _delay,
                     _flowRate,
                     _userUninvestedAmount
                 );
@@ -68,13 +78,7 @@ library dHedgeMath {
                 // If the unlocked index has no streamers, no upfront fee should be taken.
                 // Calculation for the same should consider `lastDepositAt` = `block.timestamp`.
                 if (currActiveIndex.lastDepositAt == 0) {
-                    return
-                        _calcBufferTransferAmount(
-                            _superToken,
-                            uint64(block.timestamp),
-                            _flowRate,
-                            _userUninvestedAmount
-                        );
+                    return (_userUninvestedAmount, false);
                 }
             } else {
                 currActiveIndex = (tokenData.assignedIndex[_user] ==
@@ -85,13 +89,11 @@ library dHedgeMath {
 
             return
                 _calcBufferTransferAmount(
-                    _superToken,
                     currActiveIndex.lastDepositAt,
+                    _delay,
                     _flowRate,
                     _userUninvestedAmount
                 );
-        } else if (_streamAction == 3) {
-            return (_userUninvestedAmount, false);
         } else {
             revert("dHedgeHelper: Invalid stream action");
         }
@@ -105,7 +107,8 @@ library dHedgeMath {
     function calcUserUninvested(
         dHedgeStorage.dHedgePool storage _dHedgePool,
         address _user,
-        ISuperToken _superToken
+        ISuperToken _superToken,
+        uint64 _delay
     ) public view returns (uint256) {
         /// @dev Note: when no streams are present then tokenData[_depositToken] returns null address.
         dHedgeStorage.TokenData storage tokenData = _dHedgePool.tokenData[
@@ -123,7 +126,7 @@ library dHedgeMath {
 
         return
             _userFlowRate *
-            (block.timestamp -
+            (block.timestamp + _delay -
                 (
                     (tokenData.assignedIndex[_user] ==
                         tokenData.permDistIndex1.indexId)
@@ -136,28 +139,28 @@ library dHedgeMath {
         ISuperToken _superToken,
         address _sender,
         uint64 _lastDepositAt,
+        uint64 _delay,
         uint256 _userUninvested
     ) internal view returns (uint256 _transferAmount, bool _isTaken) {
         (, int96 _flowRate) = _superToken.getFlow(_sender);
 
         (_transferAmount, _isTaken) = _calcBufferTransferAmount(
-            _superToken,
             _lastDepositAt,
+            _delay,
             _flowRate,
             _userUninvested
         );
     }
 
     function _calcBufferTransferAmount(
-        ISuperToken _superToken,
         uint64 _lastDepositAt,
+        uint64 _delay,
         int96 _flowRate,
         uint256 _userUninvested
     ) internal view returns (uint256 _transferAmount, bool _isTaken) {
-        assert(_userUninvested <= _superToken.balanceOf(address(this)));
 
         // Calculate how much amount needs to be deposited upfront.
-        uint256 _depositAmount = (block.timestamp - _lastDepositAt) *
+        uint256 _depositAmount = (block.timestamp + _delay - _lastDepositAt) *
             uint256(uint96(_flowRate));
 
         // If amount to be deposited is greater than user's uninvested amount then,

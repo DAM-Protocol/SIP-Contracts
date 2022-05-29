@@ -181,25 +181,34 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     /// @param _user Address of the user whose uninvested amount needs to be calculated.
     /// @param _superToken Address of the supertoken.
     /// @return Amount of uninvested tokens.
-    function calcUserUninvested(address _user, ISuperToken _superToken)
-        public
-        view
-        override
-        returns (uint256)
-    {
-        return poolData.calcUserUninvested(_user, _superToken);
+    function calcUserUninvested(
+        address _user,
+        ISuperToken _superToken,
+        uint64 _delay
+    ) public view override returns (uint256) {
+        return poolData.calcUserUninvested(_user, _superToken, _delay);
     }
 
+    /// Calculates buffer transfer amount required to start a stream or update a stream.
+    /// @param _user Address of the user whose buffer transfer amount needs calculation.
+    /// @param _superToken Address of the supertoken.
+    /// @param _streamAction The type of stream modification (creation -> 1 and updation -> 2).
+    /// @param _delay Useful in case transaction times are high as extra allowance can be taken.
+    /// @param _flowRate Flow rate of the stream to be created/updated.
+    /// @return _transferAmount The upfront fee to be taken or returned.
+    /// @return _isTaken Boolean representing if the upfront fee is taken or returned.
     function calcBufferTransferAmount(
         address _user,
         ISuperToken _superToken,
         uint8 _streamAction,
+        uint64 _delay,
         int96 _flowRate
     ) external view returns (uint256 _transferAmount, bool _isTaken) {
         (_transferAmount, _isTaken) = poolData.calcBufferTransferAmount(
             _user,
             _superToken,
             _streamAction,
+            _delay,
             _flowRate
         );
     }

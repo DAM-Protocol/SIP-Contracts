@@ -16,7 +16,6 @@ interface IdHedgeCore {
 
     function checkCoreActive() external view returns (bool);
 
-    // function getLatestDistIndex() external view returns (uint32);
     function getUserDistIndex(address _user, address _token)
         external
         view
@@ -32,10 +31,19 @@ interface IdHedgeCore {
             uint32
         );
 
-    function calcUserUninvested(address _user, ISuperToken _superToken)
-        external
-        view
-        returns (uint256);
+    function calcUserUninvested(
+        address _user,
+        ISuperToken _superToken,
+        uint64 _delay
+    ) external view returns (uint256);
+
+    function calcBufferTransferAmount(
+        address _user,
+        ISuperToken _superToken,
+        uint8 _streamAction,
+        uint64 _delay,
+        int96 _flowRate
+    ) external view returns (uint256 _transferAmount, bool _isTaken);
 
     function requireUpkeep() external view returns (address);
 }

@@ -440,7 +440,7 @@ describe("3-Index Approach Mock Testing", function () {
     expect(tokenDistIndexObj[3]).to.equal(2);
   });
 
-  it("Should calculate buffer transfer amount correctly - stream creation", async () => {
+  it.only("Should calculate buffer transfer amount correctly - stream creation", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
@@ -451,6 +451,20 @@ describe("3-Index Approach Mock Testing", function () {
       USDCWhale.address,
       USDCx.address,
       1,
+      constants.Zero,
+      userFlowRate
+    );
+
+    expect(result[0]).to.equal(constants.Zero);
+    expect(result[1]).to.equal(false);
+
+    // Buffer amount before a stream is started.
+    // This should return (0, false) as no one is streaming to the contract.
+    result = await app.calcBufferTransferAmount(
+      USDCWhale.address,
+      USDCx.address,
+      1,
+      getSeconds(0.5),
       userFlowRate
     );
 
@@ -468,10 +482,25 @@ describe("3-Index Approach Mock Testing", function () {
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
       userFlowRate
     );
 
     expect(result[0]).to.be.closeTo(parseUnits("3", 18), parseUnits("1", 18));
+    expect(result[1]).to.equal(true);
+
+    // Calculating buffer transfer amount after start of a stream with half a day as delay.
+    // This should return (4.5, true) as the market is active for a day now-
+    // and flow rate of $90/mo corresponds to $3/day (assuming 1 mo = 30 days).
+    result = await app.calcBufferTransferAmount(
+      admin.address,
+      USDCx.address,
+      1,
+      getSeconds(0.5),
+      userFlowRate
+    );
+
+    expect(result[0]).to.be.closeTo(parseUnits("4.5", 18), parseUnits("1", 18));
     expect(result[1]).to.equal(true);
 
     await app.dHedgeDeposit(USDC.address);
@@ -484,6 +513,21 @@ describe("3-Index Approach Mock Testing", function () {
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
+      userFlowRate
+    );
+
+    expect(result[0]).to.equal(constants.Zero);
+    expect(result[1]).to.equal(false);
+
+    // Calculating buffer amount immediately after a deposit has been made with half a day delay allowed.
+    // This should return (0, false) as shares should be assigned to a new/unlocked index-
+    // in which there have been no share assignments yet.
+    result = await app.calcBufferTransferAmount(
+      admin.address,
+      USDCx.address,
+      1,
+      getSeconds(0.5),
       userFlowRate
     );
 
@@ -499,6 +543,20 @@ describe("3-Index Approach Mock Testing", function () {
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
+      userFlowRate
+    );
+
+    expect(result[0]).to.equal(constants.Zero);
+    expect(result[1]).to.equal(false);
+
+    // Calculating buffer amount after cooldown is done and with half a day delay allowed.
+    // Should return (0, false) as unlocked index is still the same as before (new index).
+    result = await app.calcBufferTransferAmount(
+      admin.address,
+      USDCx.address,
+      1,
+      getSeconds(0.5),
       userFlowRate
     );
 
@@ -512,11 +570,25 @@ describe("3-Index Approach Mock Testing", function () {
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
 
     // Buffer amount before a stream is started.
-    // This should return (0, false) as no one is streaming to the contract.
+    // This should return (0, false) as no one is streaming to the contract and the delay is 0.
     result = await app.calcBufferTransferAmount(
       USDCWhale.address,
       USDCx.address,
       1,
+      constants.Zero,
+      userFlowRate
+    );
+
+    expect(result[0]).to.equal(constants.Zero);
+    expect(result[1]).to.equal(false);
+
+    // Buffer amount before a stream is started.
+    // This should return (0, false) as no one is streaming to the contract even if there is some delay.
+    result = await app.calcBufferTransferAmount(
+      USDCWhale.address,
+      USDCx.address,
+      1,
+      getSeconds(0.5),
       userFlowRate
     );
 
@@ -537,30 +609,79 @@ describe("3-Index Approach Mock Testing", function () {
       USDCWhale.address,
       USDCx.address,
       2,
+      constants.Zero,
       userFlowRate
     );
 
     expect(result[0]).to.be.closeTo(parseUnits("1", 18), parseUnits("0.1", 18));
     expect(result[1]).to.equal(true);
 
+    // await increaseTime(getSeconds(0.5));
+
     // Calculate buffer amount after a stream has started and a user wants to update the stream rate.
-    // This should return (1, false) as it's been a day since the user started a stream with rate $3/day.
-    // Now, if he/she wants to update this to $2/day, the market should have $2 by the end of the day.
-    // Hence, $1 is given as upfront fee to the user.
+    // This should return (1.5, true) as it's been a day and a half since the user started a stream with rate $3/day.
+    // Now, if he/she wants to update this to $4/day, the contract should have $6 by the end of 1 and a half days.
+    // The contract currently has $4.5.
+    // Hence, $1.5 is taken as upfront deposit from the user.
     result = await app.calcBufferTransferAmount(
       USDCWhale.address,
       USDCx.address,
       2,
+      getSeconds(0.5),
+      userFlowRate
+    );
+
+    expect(result[0]).to.be.closeTo(
+      parseUnits("1.5", 18),
+      parseUnits("0.1", 18)
+    );
+    expect(result[1]).to.equal(true);
+
+    // Calculate buffer amount after a stream has started and a user wants to update the stream rate.
+    // This should return (1.5, false) as it's been a day and a half since the user started a stream with rate $3/day.
+    // Now, if he/she wants to update this to $2/day, the contract should have $3 by the end of one day.
+    // Since we are ahead by 1 and a half days, the amount in the contract is $4.5.
+    // Hence, $1.5 is given as upfront fee to the user.
+    result = await app.calcBufferTransferAmount(
+      USDCWhale.address,
+      USDCx.address,
+      2,
+      constants.Zero,
       parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
     );
 
-    expect(result[0]).to.be.closeTo(parseUnits("1", 18), parseUnits("0.1", 18));
+    expect(result[0]).to.be.closeTo(
+      parseUnits("1", 18),
+      parseUnits("0.01", 18)
+    );
+    expect(result[1]).to.equal(false);
+
+    // await increaseTime(getSeconds(0.5));
+
+    // Calculate buffer amount after a stream has started and a user wants to update the stream rate.
+    // This should return (2, false) as it's been 2 days since the user started a stream with rate $3/day.
+    // Now, if he/she wants to update this to $2/day, the market should have $4 by the end of the day.
+    // Since we are ahead by 2 days, the amount in the contract is $6.
+    // Hence, $2 is given as upfront fee to the user.
+    result = await app.calcBufferTransferAmount(
+      USDCWhale.address,
+      USDCx.address,
+      2,
+      getSeconds(0.5),
+      parseUnits("60", 18).div(getBigNumber(getSeconds(30)))
+    );
+
+    expect(result[0]).to.be.closeTo(
+      parseUnits("1.5", 18),
+      parseUnits("0.1", 18)
+    );
     expect(result[1]).to.equal(false);
 
     result = await app.calcBufferTransferAmount(
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
       userFlowRate
     );
 
@@ -574,6 +695,7 @@ describe("3-Index Approach Mock Testing", function () {
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
       userFlowRate
     );
 
@@ -584,6 +706,7 @@ describe("3-Index Approach Mock Testing", function () {
       USDCWhale.address,
       USDCx.address,
       2,
+      constants.Zero,
       userFlowRate
     );
 
@@ -597,6 +720,7 @@ describe("3-Index Approach Mock Testing", function () {
       USDCWhale.address,
       USDCx.address,
       2,
+      constants.Zero,
       userFlowRate
     );
 
@@ -610,83 +734,11 @@ describe("3-Index Approach Mock Testing", function () {
       admin.address,
       USDCx.address,
       1,
+      constants.Zero,
       userFlowRate
     );
 
     expect(result[0]).to.equal(constants.Zero);
-    expect(result[1]).to.equal(false);
-  });
-
-  it("Should calculate buffer transfer amount correctly - stream termination", async () => {
-    await loadFixture(setupEnv);
-
-    userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
-
-    // Buffer amount before a stream is started.
-    // This should return (0, false) as no one is streaming to the contract.
-    result = await app.calcBufferTransferAmount(
-      USDCWhale.address,
-      USDCx.address,
-      1,
-      userFlowRate
-    );
-
-    expect(result[0]).to.equal(constants.Zero);
-    expect(result[1]).to.equal(false);
-
-    await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
-
-    await increaseTime(getSeconds(1));
-
-    // Calculating buffer amount after starting a stream and after a day has elapsed.
-    // Should return (3, false) as stream rate is $3/day and a day has elapsed since the stream was started.
-    result = await app.calcBufferTransferAmount(
-      USDCWhale.address,
-      USDCx.address,
-      3,
-      userFlowRate
-    );
-
-    expect(result[0]).to.be.closeTo(
-      parseUnits("3", 18),
-      parseUnits("0.01", 18)
-    );
-    expect(result[1]).to.equal(false);
-
-    await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
-    // Calculating buffer amount after depositing into dHEDGE.
-    // Should return (0, false) as there is no uninvested amount left in the contract.
-    // This '0' is approximate value as there will be some delay between calling `calcBufferTransferAmount`-
-    // and `dHedgeDeposit`.
-    result = await app.calcBufferTransferAmount(
-      USDCWhale.address,
-      USDCx.address,
-      3,
-      userFlowRate
-    );
-
-    expect(result[0]).to.be.closeTo(constants.Zero, parseUnits("0.01", 18));
-    expect(result[1]).to.equal(false);
-
-    await increaseTime(getSeconds(1));
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
-    // Calculating buffer amount after one more day has elapsed and cooldown is complete.
-    // Should return (3, false) as the user has the exact same stream rate as before ($3/day) and-
-    // a day has elapsed.
-    result = await app.calcBufferTransferAmount(
-      USDCWhale.address,
-      USDCx.address,
-      3,
-      userFlowRate
-    );
-
-    expect(result[0]).to.be.closeTo(
-      parseUnits("3", 18),
-      parseUnits("0.01", 18)
-    );
     expect(result[1]).to.equal(false);
   });
 

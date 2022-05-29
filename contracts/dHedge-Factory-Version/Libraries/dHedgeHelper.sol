@@ -247,7 +247,7 @@ library dHedgeHelper {
     /// This function serves as the `afterAgreementCreated` hook for Superfluid CFA.
     /// Responsible for actions to be taken after creation of a stream (transfer buffer, update shares, etc.).
     /// @param _dHedgePool Struct containing details regarding the pool and various tokens in it.
-    /// @param _superToken Underlying token of the supertoken.
+    /// @param _superToken The supertoken whose stream needs to be created.
     /// @param _agreementClass Tells whether it's CFA or IDA contract call.
     /// @param _ctx Superfluid context object.
     /// @param _cbdata Callback data passed on from `beforeAgreementCreated` hook.
@@ -279,32 +279,33 @@ library dHedgeHelper {
             ISuperToken _DHPTx = _dHedgePool.DHPTx;
 
             // Select the active index ID.
-            uint32 _index = (tokenData.lockedIndexId ==
-                tokenData.permDistIndex1.indexId)
-                ? tokenData.permDistIndex2.indexId
-                : tokenData.permDistIndex1.indexId;
+            dHedgeStorage.PermIndexData storage index = (tokenData
+                .lockedIndexId == tokenData.permDistIndex1.indexId)
+                ? tokenData.permDistIndex2
+                : tokenData.permDistIndex1;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
             // Initialise the index in case the index is inactive.
-            _initIndex(tokenData, _index);
+            _initIndex(index);
 
+            uint32 _currActiveIndexId = index.indexId;
             // Mark the assigned index of the user. Will be useful when updating/terminating the stream.
-            tokenData.assignedIndex[_sender] = _index;
+            tokenData.assignedIndex[_sender] = _currActiveIndexId;
 
             // Transfer the buffer amount (upfront fee). Requirement is explained below.
-            _transferBuffer(
-                _superToken,
-                _sender,
-                (_index == tokenData.permDistIndex1.indexId)
-                    ? tokenData.permDistIndex1.lastDepositAt
-                    : tokenData.permDistIndex2.lastDepositAt,
-                _userUninvested
-            );
+            if (index.lastDepositAt != 0) {
+                _transferBuffer(
+                    _superToken,
+                    _sender,
+                    index.lastDepositAt,
+                    _userUninvested
+                );
+            }
 
             // Assign new units in the active index.
             _newCtx = _superToken.updateSharesInCallback(
                 _DHPTx,
-                _index,
+                _currActiveIndexId,
                 _sender,
                 _newCtx
             );
@@ -355,42 +356,47 @@ library dHedgeHelper {
                 _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
             }
 
-            uint32 _currActiveIndex;
+            dHedgeStorage.PermIndexData storage currActiveIndex;
 
             // If distribution hasn't happened for the previous cycle then, select the unlocked index.
             // Else, select the assigned index of the user as the active index.
             // This is because the DHPT locked in the latest cycle has already been deposited and in such a-
             // case, index migration isn't necessary.
             if (tokenData.distAmount != 0) {
-                _currActiveIndex = (_lockedIndexId ==
+                currActiveIndex = (_lockedIndexId ==
                     tokenData.permDistIndex1.indexId)
-                    ? tokenData.permDistIndex2.indexId
-                    : tokenData.permDistIndex1.indexId;
+                    ? tokenData.permDistIndex2
+                    : tokenData.permDistIndex1;
             } else {
-                _currActiveIndex = tokenData.assignedIndex[_sender];
+                currActiveIndex = (tokenData.assignedIndex[_sender] ==
+                    tokenData.permDistIndex1.indexId)
+                    ? tokenData.permDistIndex1
+                    : tokenData.permDistIndex2;
             }
 
             // Initialise the `_currActiveIndex` if not already done (detailed further down).
-            _initIndex(tokenData, _currActiveIndex);
+            _initIndex(currActiveIndex);
+
+            uint32 _currActiveIndexId = currActiveIndex.indexId;
 
             // Modify user's assigned index as the current active index if not the same.
-            if (tokenData.assignedIndex[_sender] != _currActiveIndex)
-                tokenData.assignedIndex[_sender] = _currActiveIndex;
+            if (tokenData.assignedIndex[_sender] != _currActiveIndexId)
+                tokenData.assignedIndex[_sender] = _currActiveIndexId;
 
             // Transfer the buffer amount (upfront fee). Requirement is explained below.
-            _transferBuffer(
-                _superToken,
-                _sender,
-                (_currActiveIndex == tokenData.permDistIndex1.indexId)
-                    ? tokenData.permDistIndex1.lastDepositAt
-                    : tokenData.permDistIndex2.lastDepositAt,
-                _userUninvested
-            );
+            if (currActiveIndex.lastDepositAt != 0) {
+                _transferBuffer(
+                    _superToken,
+                    _sender,
+                    currActiveIndex.lastDepositAt,
+                    _userUninvested
+                );
+            }
 
             // Assigning new units in the active index.
             _newCtx = _superToken.updateSharesInCallback(
                 _DHPTx,
-                _currActiveIndex,
+                _currActiveIndexId,
                 _sender,
                 _newCtx
             );
@@ -511,7 +517,7 @@ library dHedgeHelper {
 
             // Encode the uninvested amount. We calculate it before modifying the stream rate.
             _cbdata = abi.encode(
-                _dHedgePool.calcUserUninvested(_user, _superToken)
+                _dHedgePool.calcUserUninvested(_user, _superToken, 0)
             );
         }
     }
@@ -641,6 +647,7 @@ library dHedgeHelper {
             ._calcBufferTransferAmount(
                 _sender,
                 _lastDepositAt,
+                0,
                 _userUninvested
             );
 
@@ -662,7 +669,7 @@ library dHedgeHelper {
             } else {
                 // Else if the amount to be deposited is lesser than the uninvested amount, transfer-
                 // the difference to the user.
-                
+
                 // console.log("Amount to be transferred to: ", _amount);
 
                 _success = _superToken.transfer(_sender, _amount);
@@ -843,24 +850,11 @@ library dHedgeHelper {
     /// Function to initialise an index.
     /// An index is made inactive in case there are no subscribers. It may happen that a new subscriber-
     /// is to be issued units in an inactive index. In such a case, this function needs to be called.
-    /// @param _tokenData Struct containing all the relevant details for a deposit token.
-    /// @param _index ID of the index to be initialised.
-    function _initIndex(
-        dHedgeStorage.TokenData storage _tokenData,
-        uint32 _index
-    ) private {
-        if (
-            _index == _tokenData.permDistIndex1.indexId &&
-            !_tokenData.permDistIndex1.isActive
-        ) {
-            _tokenData.permDistIndex1.isActive = true;
-            _tokenData.permDistIndex1.lastDepositAt = uint64(block.timestamp);
-        } else if (
-            _index == _tokenData.permDistIndex2.indexId &&
-            !_tokenData.permDistIndex2.isActive
-        ) {
-            _tokenData.permDistIndex2.isActive = true;
-            _tokenData.permDistIndex2.lastDepositAt = uint64(block.timestamp);
+    /// @param _index Index to be initialised.
+    function _initIndex(dHedgeStorage.PermIndexData storage _index) private {
+        if (!_index.isActive) {
+            _index.isActive = true;
+            _index.lastDepositAt = uint64(block.timestamp);
         }
     }
 
