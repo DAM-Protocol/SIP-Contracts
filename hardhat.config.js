@@ -12,6 +12,7 @@ require("./tasks/dHedge-Factory-Version/CreateSIP");
 require("./tasks/dHedge-Factory-Version/CreateSuperToken");
 require("./tasks/dHedge-Factory-Version/PauseCore");
 require("./tasks/dHedge-Factory-Version/DeactivateCore");
+require("./tasks/dHedge-Factory-Version/CreateMockPool");
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -21,18 +22,10 @@ require("./tasks/dHedge-Factory-Version/DeactivateCore");
  */
 module.exports = {
   solidity: {
-    // compilers: [
-    //   {
-    //     version: "0.8.10",
-    //   },
-    //   {
-    //     version: "0.8.13",
-    //   },
-    // ],
-    version: "0.8.10",
+    version: "0.8.13",
     settings: {
       optimizer: {
-        enabled: false,
+        enabled: true,
         runs: 200,
       },
     },
@@ -52,7 +45,11 @@ module.exports = {
     },
     polygon: {
       url: process.env.POLYGON_NODE_URL,
-      accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`],
+      accounts: [`0x${process.env.POLYGON_PRIVATE_KEY}`],
+    },
+    mumbai: {
+      url: process.env.MUMBAI_NODE_URL,
+      accounts: [`0x${process.env.MUMBAI_PRIVATE_KEY}`],
     },
   },
   gasReporter: {
@@ -74,7 +71,9 @@ module.exports = {
   },
   namedAccounts: {
     deployer: {
-      default: "0x452181dAe31Cf9f42189df71eC64298993BEe6d3",
+      31337: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Hardhat chain id.
+      137: "0x452181dAe31Cf9f42189df71eC64298993BEe6d3", // Polygon mainnet chain id.
+      80001: "0x917A19E71a2811504C4f64aB33c132063B5772a5", // Mumbai testnet chain id.
     },
   },
   mocha: {

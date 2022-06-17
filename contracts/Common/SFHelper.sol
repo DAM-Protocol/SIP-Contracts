@@ -28,6 +28,16 @@ library SFHelper {
     //         0xB0aABBA4B2783A72C52956CDEF62d438ecA2d7a1
     //     );
 
+    // Mumbai testnet addresses.
+    // ISuperfluid public constant HOST =
+    //     ISuperfluid(0xEB796bdb90fFA0f28255275e16936D25d3418603);
+    // IConstantFlowAgreementV1 public constant CFA_V1 =
+    //     IConstantFlowAgreementV1(0x49e565Ed1bdc17F3d220f72DF0857C26FA83F873);
+    // IInstantDistributionAgreementV1 public constant IDA_V1 =
+    //     IInstantDistributionAgreementV1(
+    //         0x804348D4960a61f2d5F9ce9103027A3E849E09b8
+    //     );
+
     // Addresses for local testing.
     /// @dev Note: The addresses change for each test file. Don't run all the tests using `hh test`.
     /// Run each test file individually after getting the address from the `SFSetup.js`.

@@ -21,17 +21,36 @@ task(
       "event SuperTokenCreated(address indexed token)",
     ];
 
-    const host = await ethers.getContractAt(
-      hostABI,
-      "0x3E14dC1b13c488a8d5D310918780c983bD5982E7"
-    );
+    const chainId = await getChainId();
+
+    let host;
+    switch (chainId) {
+      case "80001":
+        host = await ethers.getContractAt(
+          hostABI,
+          "0xEB796bdb90fFA0f28255275e16936D25d3418603"
+        );
+
+        break;
+      case "137":
+        host = await ethers.getContractAt(
+          hostABI,
+          "0x3E14dC1b13c488a8d5D310918780c983bD5982E7"
+        );
+
+        break;
+
+      default:
+        throw Error("Chain Id not supported");
+    }
+
     const superTokenFactoryAddr = await host.getSuperTokenFactory();
     const superTokenFactory = await ethers.getContractAt(
       superTokenFactoryABI,
       superTokenFactoryAddr
     );
 
-    await superTokenFactory.createERC20Wrapper(
+    const result = await superTokenFactory.createERC20Wrapper(
       taskArgs.underlying,
       1,
       taskArgs.name,
@@ -39,28 +58,6 @@ task(
     );
 
     console.log(
-      "New super token created, check polygonscan for more info about the address"
+      `New super token created, check polygonscan for tx hash ${result.hash} for more info about the address`
     );
-    
-    // The following doesn't work on mainnet
-    // const getSuperTokenAddr = async () => {
-    //   const superTokenFilter =
-    //     await superTokenFactory.filters.SuperTokenCreated();
-
-    //   return await superTokenFactory.queryFilter(
-    //     superTokenFilter,
-    //     -1,
-    //     "latest"
-    //   );
-    // };
-
-    // let response;
-    // while ((response = await getSuperTokenAddr()) === undefined) {
-    //   console.log("Reached here");
-    //   setTimeout(getSuperTokenAddr, 2000);
-    // }
-    // console.log(response);
-    // console.log(
-    //   `New supertoken address for token ${taskArgs.name} with symbol ${taskArgs.symbol}: ${response[0].args[0]}`
-    // );
   });

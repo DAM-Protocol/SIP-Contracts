@@ -321,7 +321,6 @@ describe("3-Index Approach Revert Mock Testing", function () {
       await increaseTime(getSeconds(1));
 
       await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
       await expect(app.dHedgeDeposit(USDC.address)).to.be.revertedWith(
         "dHedgeHelper: Deposit not required"
@@ -356,11 +355,9 @@ describe("3-Index Approach Revert Mock Testing", function () {
       await increaseTime(getSeconds(1));
 
       await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
       await increaseTime(getSeconds(1));
 
-      await mockPool.setExitRemainingCooldown(app.address, "0");
       await app.distribute(USDC.address);
 
       await expect(app.distribute(USDC.address)).to.be.revertedWith(
@@ -377,13 +374,10 @@ describe("3-Index Approach Revert Mock Testing", function () {
       await increaseTime(getSeconds(1));
 
       await app.dHedgeDeposit(USDC.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
       await app.dHedgeDeposit(DAI.address);
-      await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
       await increaseTime(getSeconds(1));
 
-      await mockPool.setExitRemainingCooldown(app.address, "0");
       await app.distribute(USDC.address);
       await app.distribute(DAI.address);
 

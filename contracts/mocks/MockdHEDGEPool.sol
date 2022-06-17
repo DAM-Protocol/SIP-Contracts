@@ -4,6 +4,8 @@ pragma solidity ^0.8.10;
 import { IPoolLogic, IPoolManagerLogic } from "../dHedge-Factory-Version/Interfaces/IdHedge.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+import "hardhat/console.sol";
+
 contract MockdHEDGEPool is ERC20, IPoolLogic, IPoolManagerLogic {
     uint8 private _decimals;
 
@@ -47,18 +49,13 @@ contract MockdHEDGEPool is ERC20, IPoolLogic, IPoolManagerLogic {
             _liquidityMinted = _amount / (10**(18 - tokenDecimals));
         }
 
+        remainingCooldown[msg.sender] = block.timestamp + 24 hours;
+
         ERC20._mint(msg.sender, _liquidityMinted);
-    }
 
-    // function withdraw(uint256 _fundTokenAmount) external {
-    //     ERC20.transferFrom(address(this), msg.sender, _fundTokenAmount);
-    // }
+        console.log("Total DHPT from poolLogic: %s", balanceOf(msg.sender));
 
-    function setExitRemainingCooldown(
-        address _sender,
-        uint256 _exitRemainingCooldown
-    ) public {
-        remainingCooldown[_sender] = _exitRemainingCooldown;
+        ERC20(_asset).transferFrom(msg.sender, address(this), _amount);
     }
 
     function getExitRemainingCooldown(address _sender)
@@ -66,7 +63,10 @@ contract MockdHEDGEPool is ERC20, IPoolLogic, IPoolManagerLogic {
         view
         returns (uint256)
     {
-        return remainingCooldown[_sender];
+        if (remainingCooldown[_sender] > block.timestamp)
+            return remainingCooldown[_sender] - block.timestamp;
+
+        return 0;
     }
 
     function poolManagerLogic() public view returns (address) {

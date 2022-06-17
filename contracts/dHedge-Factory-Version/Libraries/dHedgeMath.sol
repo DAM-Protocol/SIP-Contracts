@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.10;
 
 import { IERC20Mod } from "../../Common/IERC20Mod.sol";

@@ -125,8 +125,7 @@ library dHedgeHelper {
         uint32 _lockedIndexId = tokenData.lockedIndexId;
         uint32 _permDistIndex1 = tokenData.permDistIndex1.indexId;
         uint32 _permDistIndex2 = tokenData.permDistIndex2.indexId;
-        uint32 _tempDistIndex = tokenData.tempDistIndex;
-        uint256 _superTokenBalance = _superToken.balanceOf(address(this));
+        // uint256 _superTokenBalance = _superToken.balanceOf(address(this));
 
         // Upgrade the unlocked DHPT such that DHPT is transferred to SF vesting contract.
         // This is because we have to proceed with next cycle of deposits without locking previous cycles' DHPT.
@@ -141,7 +140,7 @@ library dHedgeHelper {
                 tokenData,
                 _DHPTx,
                 _lockedIndexId,
-                _tempDistIndex
+                tokenData.tempDistIndex
             );
         }
 
@@ -149,14 +148,15 @@ library dHedgeHelper {
         if (
             _lockedIndexId == _permDistIndex1 &&
             tokenData.permDistIndex2.isActive
-        )
+        ) {
             _lockedIndexId = _permDistIndex2;
-
-            // If index 2 is locked but index 1 is active then proceed with index 1.
-        else if (
+        } else if (
             _lockedIndexId == _permDistIndex2 &&
             tokenData.permDistIndex1.isActive
-        ) _lockedIndexId = _permDistIndex1;
+        ) {
+            // If index 2 is locked but index 1 is active then proceed with index 1.
+            _lockedIndexId = _permDistIndex1;
+        }
 
         // Else:
         // - If index 1 is locked and index 2 is inactive then proceed with index 1.
@@ -168,7 +168,7 @@ library dHedgeHelper {
             _lockedIndexId,
             _permDistIndex1,
             _permDistIndex2,
-            _superTokenBalance
+            _superToken.balanceOf(address(this))
         );
 
         // If there is anything to deposit, only then should the deposit proceed.
@@ -185,7 +185,7 @@ library dHedgeHelper {
                 _poolLogic
             );
 
-            // If `_lockedIndexId` is correct, don't modify it (gas savings).
+            // If `_lockedIndexId` is correct, don't modify it (minor gas savings).
             if (tokenData.lockedIndexId != _lockedIndexId)
                 tokenData.lockedIndexId = _lockedIndexId;
 
@@ -202,9 +202,13 @@ library dHedgeHelper {
 
             // Finally, update timestamp indicating when a deposit (of any token) was made into the dHEDGE pool.
             _dHedgePool.lastDepositAt = uint64(block.timestamp);
-        }
 
-        // console.log("Deposit for index %s complete", _lockedIndexId);
+            // console.log("Deposit for index %s complete", _lockedIndexId);
+            // console.log(
+            //     "Total DHPT: %s",
+            //     IERC20Mod(address(_poolLogic)).balanceOf(address(this))
+            // );
+        }
     }
 
     /// Function to distribute DHPTx.
@@ -285,14 +289,20 @@ library dHedgeHelper {
                 : tokenData.permDistIndex1;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
-            // Initialise the index in case the index is inactive.
-            _initIndex(index);
+            // Initialise the `_currActiveIndex` if not already done (detailed further down).
+            // An index is made inactive in case there are no subscribers. It may happen that a new subscriber-
+            // is to be issued units in an inactive index. In such a case, intialisation is required.
+            if (!index.isActive) {
+                index.isActive = true;
+                index.lastDepositAt = uint64(block.timestamp);
+            }
 
             uint32 _currActiveIndexId = index.indexId;
+
             // Mark the assigned index of the user. Will be useful when updating/terminating the stream.
             tokenData.assignedIndex[_sender] = _currActiveIndexId;
 
-            // Transfer the buffer amount (upfront fee). Requirement is explained below.
+            // Transfer the buffer amount (upfront deposit). Requirement is explained below.
             if (index.lastDepositAt != 0) {
                 _transferBuffer(
                     _superToken,
@@ -348,42 +358,46 @@ library dHedgeHelper {
             uint32 _lockedIndexId = tokenData.lockedIndexId;
             uint256 _userUninvested = abi.decode(_cbdata, (uint256));
 
-            // If assigned index is currently locked then we will have to initiate index migration (detailed below).
-            if (
-                tokenData.distAmount != 0 &&
-                tokenData.assignedIndex[_sender] == _lockedIndexId
-            ) {
-                _migrateIndex(tokenData, _DHPTx, _sender, _newCtx);
-            }
-
             dHedgeStorage.PermIndexData storage currActiveIndex;
 
-            // If distribution hasn't happened for the previous cycle then, select the unlocked index.
-            // Else, select the assigned index of the user as the active index.
-            // This is because the DHPT locked in the latest cycle has already been deposited and in such a-
-            // case, index migration isn't necessary.
             if (tokenData.distAmount != 0) {
+                // If distribution hasn't happened for the previous cycle then, select the unlocked index.
                 currActiveIndex = (_lockedIndexId ==
                     tokenData.permDistIndex1.indexId)
                     ? tokenData.permDistIndex2
                     : tokenData.permDistIndex1;
+
+                // Initialise the `_currActiveIndex` if not already done (detailed further down).
+                // An index is made inactive in case there are no subscribers. It may happen that a new subscriber-
+                // is to be issued units in an inactive index. In such a case, intialisation is required.
+                if (!currActiveIndex.isActive) {
+                    currActiveIndex.isActive = true;
+                    currActiveIndex.lastDepositAt = uint64(block.timestamp);
+                }
+
+                // If assigned index is currently locked then we will have to initiate index migration (detailed below).
+                if (tokenData.assignedIndex[_sender] == _lockedIndexId) {
+                    _newCtx = _migrateIndex(
+                        tokenData,
+                        _DHPTx,
+                        _sender,
+                        _newCtx
+                    );
+
+                    // Modify user's assigned index as the current active index if not the same.
+                    tokenData.assignedIndex[_sender] = currActiveIndex.indexId;
+                }
             } else {
+                // Else, select the assigned index of the user as the active index.
+                // This is because the DHPT locked in the latest cycle has already been deposited and in such a-
+                // case, index migration isn't necessary.
                 currActiveIndex = (tokenData.assignedIndex[_sender] ==
                     tokenData.permDistIndex1.indexId)
                     ? tokenData.permDistIndex1
                     : tokenData.permDistIndex2;
             }
 
-            // Initialise the `_currActiveIndex` if not already done (detailed further down).
-            _initIndex(currActiveIndex);
-
-            uint32 _currActiveIndexId = currActiveIndex.indexId;
-
-            // Modify user's assigned index as the current active index if not the same.
-            if (tokenData.assignedIndex[_sender] != _currActiveIndexId)
-                tokenData.assignedIndex[_sender] = _currActiveIndexId;
-
-            // Transfer the buffer amount (upfront fee). Requirement is explained below.
+            // Transfer the buffer amount (upfront deposit). Requirement is explained below.
             if (currActiveIndex.lastDepositAt != 0) {
                 _transferBuffer(
                     _superToken,
@@ -396,7 +410,7 @@ library dHedgeHelper {
             // Assigning new units in the active index.
             _newCtx = _superToken.updateSharesInCallback(
                 _DHPTx,
-                _currActiveIndexId,
+                currActiveIndex.indexId,
                 _sender,
                 _newCtx
             );
@@ -464,6 +478,7 @@ library dHedgeHelper {
                     _newCtx
                 );
 
+                // If the total units in the current index was equal to user's units, make the index inactive.
                 if (_totalUnits == _userUnits) {
                     if (_assignedIndex == tokenData.permDistIndex1.indexId) {
                         tokenData.permDistIndex1.isActive = false;
@@ -477,7 +492,7 @@ library dHedgeHelper {
 
             delete tokenData.assignedIndex[_sender];
 
-            /// @dev We can directly transfer the amount instead of using `_transferBuffer`.
+            // @dev We can directly transfer the amount instead of using `_transferBuffer`.
             assert(_userUninvested <= _superToken.balanceOf(address(this)));
 
             require(
@@ -626,8 +641,8 @@ library dHedgeHelper {
         return _supportLogic.isDepositAsset(_token);
     }
 
-    /// Function containing logic for collecting upfront fee.
-    /// A upfront fee needs to be collected in order to maintain the same distribution unit price for a deposit cycle-
+    /// Function containing logic for collecting upfront deposit.
+    /// A upfront deposit needs to be collected in order to maintain the same distribution unit price for a deposit cycle-
     /// for all streamers. For example, a person starting a stream of $10/day soon after a deposit gets the same-
     /// number of units as another person starting a stream with the same rate but just before the next deposit.
     /// However, the second person streamed a lot less than the first person and hence shouldn't get the same-
@@ -679,36 +694,6 @@ library dHedgeHelper {
 
             require(_success, "dHedgeHelper: Buffer transfer failed");
         }
-
-        // // If amount to be deposited is greater than user's uninvested amount then,
-        // // transfer the difference from the user.
-        // if (_depositAmount > _userUninvested) {
-        //     uint256 _amount = _depositAmount - _userUninvested;
-
-        //     // console.log("Amount to be transferred from: ", _amount);
-
-        //     _success = _superToken.transferFrom(
-        //         _sender,
-        //         address(this),
-        //         _amount
-        //     );
-
-        //     emit UpfrontFeeDeposited(_superToken, _sender, _amount);
-        // } else if (_depositAmount < _userUninvested) {
-        //     // Else if the amount to be deposited is lesser than the uninvested amount, transfer-
-        //     // the difference to the user.
-        //     uint256 _amount = _userUninvested - _depositAmount;
-
-        //     // console.log("Amount to be transferred to: ", _amount);
-
-        //     _success = _superToken.transfer(_sender, _amount);
-
-        //     emit UpfrontFeeReturned(_superToken, _sender, _amount);
-        // } else {
-        //     // If `_depositAmount == _userUninvested` then technically no transfer should take place.
-        //     // This case can be reached for the very first streamer of a new supertoken.
-        //     _success = true;
-        // }
     }
 
     /// Function containing the logic to make a deposit into the dHEDGE pool.
@@ -845,17 +830,6 @@ library dHedgeHelper {
         );
 
         // console.log("Reached after share update");
-    }
-
-    /// Function to initialise an index.
-    /// An index is made inactive in case there are no subscribers. It may happen that a new subscriber-
-    /// is to be issued units in an inactive index. In such a case, this function needs to be called.
-    /// @param _index Index to be initialised.
-    function _initIndex(dHedgeStorage.PermIndexData storage _index) private {
-        if (!_index.isActive) {
-            _index.isActive = true;
-            _index.lastDepositAt = uint64(block.timestamp);
-        }
     }
 
     /// Function containing actual logic to distribute DHPTx.

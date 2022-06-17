@@ -1,4 +1,4 @@
-const SuperfluidSDK = require("@superfluid-finance/sdk-core");
+/* eslint-disable node/no-unpublished-require */
 const { task } = require("hardhat/config");
 const dHedgeCoreFactoryABI = require("../../deployments/polygon/dHedgeCoreFactory.json");
 

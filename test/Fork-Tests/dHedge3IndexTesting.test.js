@@ -90,9 +90,18 @@ describe("3-Index Approach Fork Testing", function () {
     dHedgeStorage = await dHedgeStorageFactory.deploy();
     await dHedgeStorage.deployed();
 
+    dHedgeMathFactory = await ethers.getContractFactory("dHedgeMath", {
+      libraries: {
+        SFHelper: SFHelper.address,
+      },
+    });
+    dHedgeMath = await dHedgeMathFactory.deploy();
+    await dHedgeMath.deployed();
+
     dHedgeHelperFactory = await ethers.getContractFactory("dHedgeHelper", {
       libraries: {
         SFHelper: SFHelper.address,
+        dHedgeMath: dHedgeMath.address,
       },
     });
     dHedgeHelper = await dHedgeHelperFactory.deploy();
@@ -140,6 +149,7 @@ describe("3-Index Approach Fork Testing", function () {
         libraries: {
           SFHelper: SFHelper.address,
           dHedgeHelper: dHedgeHelper.address,
+          dHedgeMath: dHedgeMath.address,
         },
         admin,
       }

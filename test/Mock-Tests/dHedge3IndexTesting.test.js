@@ -13,16 +13,11 @@ const {
 } = require("../../helpers/helpers");
 const { constants } = require("ethers");
 
-// const errorHandler = (err) => {
-//   if (err) throw err;
-// };
-
 describe("3-Index Approach Mock Testing", function () {
   const [admin, DAO, USDCWhale, DAIWhale, DAIWhale2] = provider.getWallets();
   const ethersProvider = provider;
 
   let sf, resolverAddress, superTokenFactory;
-  // let USDCWhale, DAIWhale, DAIWhale2;
   let DAI, USDC, DHPT;
   let mockPool, mockPoolFactory;
   let USDCx, DAIx, DHPTx;
@@ -35,7 +30,7 @@ describe("3-Index Approach Mock Testing", function () {
     sf = await Framework.create({
       networkName: "hardhat",
       dataMode: "WEB3_ONLY",
-      resolverAddress: resolverAddress, // Polygon mainnet resolver
+      resolverAddress: resolverAddress, // Resolver address after framework deployment.
       protocolReleaseVersion: "test",
       provider: ethersProvider,
     });
@@ -46,12 +41,7 @@ describe("3-Index Approach Mock Testing", function () {
     USDC = await tokenFactory.deploy("USDC mock", "USDC", 6);
     await DAI.deployed();
     await USDC.deployed();
-    // DHPT = await tokenFactory.deploy("DHPT Mock", "DHPT", 18);
 
-    console.log("Mock tokens deployed");
-    // DHPT = new Contract(DHPTx.underlyingToken.address, "IERC20", admin);
-
-    // mockPool = await deployMockContract(admin, PoolLogic);
     mockPoolFactory = await ethers.getContractFactory("MockdHEDGEPool", admin);
 
     DAIxAddr = await createSuperToken(
@@ -76,9 +66,9 @@ describe("3-Index Approach Mock Testing", function () {
     SFHelper = await SFHelperFactory.deploy();
     await SFHelper.deployed();
 
-    dHedgeStorageFactory = await ethers.getContractFactory("dHedgeStorage");
-    dHedgeStorage = await dHedgeStorageFactory.deploy();
-    await dHedgeStorage.deployed();
+    // dHedgeStorageFactory = await ethers.getContractFactory("dHedgeStorage");
+    // dHedgeStorage = await dHedgeStorageFactory.deploy();
+    // await dHedgeStorage.deployed();
 
     dHedgeMathFactory = await ethers.getContractFactory("dHedgeMath", {
       libraries: {
@@ -132,9 +122,7 @@ describe("3-Index Approach Mock Testing", function () {
     factory = await dHedgeCoreCreatorFactory.deploy(DAO.address, "20000");
 
     await factory.deployed();
-    // await registerAppByFactory(factory.address);
 
-    // await mockPool.mock.increaseAllowance.returns(true);
     await factory.createdHedgeCore(mockPool.address, DHPTx.address);
 
     newCore = await factory.cores(mockPool.address);
@@ -250,8 +238,8 @@ describe("3-Index Approach Mock Testing", function () {
     tokenDistIndex =
       tokenDistObj[3] === tokenDistObj[0] ? tokenDistObj[1] : tokenDistObj[0];
 
-    // console.log("Token Dist Obj: ", tokenDistObj);
-    // console.log("Token dist index: ", tokenDistIndex);
+    console.log("Token Dist Obj: ", tokenDistObj);
+    console.log("Token dist index: ", tokenDistIndex);
 
     approveOp = sf.idaV1.approveSubscription({
       indexId: tokenDistIndex,
@@ -282,8 +270,6 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
@@ -333,8 +319,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, constants.Zero);
-
     await app.distribute(USDC.address);
 
     await sf.cfaV1
@@ -371,15 +355,13 @@ describe("3-Index Approach Mock Testing", function () {
 
     await app.dHedgeDeposit(USDC.address);
 
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
     tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(2);
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
+    //
 
     await app.distribute(USDC.address);
 
@@ -419,8 +401,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await app.dHedgeDeposit(USDC.address);
 
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
     tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(1);
@@ -429,18 +409,14 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.dHedgeDeposit(USDC.address);
-
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
 
     expect(tokenDistIndexObj[3]).to.equal(2);
   });
 
-  it.only("Should calculate buffer transfer amount correctly - stream creation", async () => {
+  it("Should calculate buffer transfer amount correctly - stream creation", async () => {
     await loadFixture(setupEnv);
 
     userFlowRate = parseUnits("90", 18).div(getBigNumber(getSeconds(30)));
@@ -504,7 +480,6 @@ describe("3-Index Approach Mock Testing", function () {
     expect(result[1]).to.equal(true);
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     // Calculating buffer amount immediately after a deposit has been made.
     // This should return (0, false) as shares should be assigned to a new/unlocked index-
@@ -535,7 +510,6 @@ describe("3-Index Approach Mock Testing", function () {
     expect(result[1]).to.equal(false);
 
     await increaseTime(getSeconds(1));
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     // Calculating buffer amount after cooldown is done.
     // Should return (0, false) as unlocked index is still the same as before (new index).
@@ -689,7 +663,6 @@ describe("3-Index Approach Mock Testing", function () {
     expect(result[1]).to.equal(true);
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     result = await app.calcBufferTransferAmount(
       admin.address,
@@ -714,7 +687,6 @@ describe("3-Index Approach Mock Testing", function () {
     expect(result[1]).to.equal(false);
 
     await increaseTime(getSeconds(1));
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     result = await app.calcBufferTransferAmount(
       USDCWhale.address,
@@ -761,13 +733,9 @@ describe("3-Index Approach Mock Testing", function () {
 
     await app.dHedgeDeposit(USDC.address);
 
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
-
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     await app.distribute(USDC.address);
 
@@ -781,8 +749,6 @@ describe("3-Index Approach Mock Testing", function () {
     // await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
@@ -816,8 +782,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.distribute(USDC.address);
 
     expect(
@@ -830,8 +794,6 @@ describe("3-Index Approach Mock Testing", function () {
     // await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
@@ -854,8 +816,6 @@ describe("3-Index Approach Mock Testing", function () {
       .exec(USDCWhale);
 
     await increaseTime(getSeconds(1));
-
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     await app.distribute(USDC.address);
 
@@ -898,8 +858,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await app.dHedgeDeposit(USDC.address);
 
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
-
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     tokenDistIndexObj = await app.getTokenDistIndices(USDC.address);
@@ -930,11 +888,7 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.dHedgeDeposit(USDC.address);
-
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
@@ -964,8 +918,6 @@ describe("3-Index Approach Mock Testing", function () {
       .exec(USDCWhale);
 
     await increaseTime(getSeconds(1));
-
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     await app.distribute(USDC.address);
 
@@ -1012,10 +964,8 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
@@ -1026,10 +976,27 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.distribute(USDC.address);
     await app.distribute(DAI.address);
+
+    console.log(
+      "Remaining DHPT: ",
+      (await DHPT.balanceOf(app.address)).toString()
+    );
+    console.log(
+      "Remaining DHPTx: ",
+      await DHPTx.balanceOf({
+        account: app.address,
+        providerOrSigner: ethersProvider,
+      })
+    );
+    console.log(
+      "DHPTx contract balance: ",
+      await DHPTx.balanceOf({
+        account: DHPTx.address,
+        providerOrSigner: ethersProvider,
+      })
+    );
 
     expect(
       await DHPTx.balanceOf({
@@ -1065,16 +1032,12 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
-
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     await app.distribute(USDC.address);
     await app.distribute(DAI.address);
@@ -1089,9 +1052,7 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
@@ -1131,8 +1092,6 @@ describe("3-Index Approach Mock Testing", function () {
       .exec(admin);
 
     await increaseTime(getSeconds(1));
-
-    await mockPool.setExitRemainingCooldown(app.address, "0");
 
     await app.distribute(USDC.address);
     await app.distribute(DAI.address);
@@ -1175,9 +1134,7 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
     tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
@@ -1250,12 +1207,8 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
     tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
@@ -1274,12 +1227,8 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
     await app.dHedgeDeposit(DAI.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     tokenDistIndexObjUSDC = await app.getTokenDistIndices(USDC.address);
     tokenDistIndexObjDAI = await app.getTokenDistIndices(DAI.address);
@@ -1333,8 +1282,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
-
     await app.distribute(USDC.address);
     await app.distribute(DAI.address);
 
@@ -1377,13 +1324,11 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.distribute(USDC.address);
 
     expect(
@@ -1432,13 +1377,11 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.distribute(USDC.address);
 
     expect(
@@ -1471,7 +1414,6 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance3 = await DHPT.balanceOf(app.address);
 
@@ -1511,7 +1453,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.distribute(USDC.address);
 
     expect(
@@ -1555,7 +1496,6 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance1 = await DHPT.balanceOf(app.address);
 
@@ -1581,7 +1521,6 @@ describe("3-Index Approach Mock Testing", function () {
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.distribute(USDC.address);
 
     expect(
@@ -1598,13 +1537,11 @@ describe("3-Index Approach Mock Testing", function () {
     await increaseTime(getSeconds(1));
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     DHPTBalance2 = await DHPT.balanceOf(app.address);
 
     await increaseTime(getSeconds(1));
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.distribute(USDC.address);
 
     expect(
@@ -1627,7 +1564,6 @@ describe("3-Index Approach Mock Testing", function () {
     balanceBefore = await USDC.balanceOf(DAO.address);
 
     await app.dHedgeDeposit(USDC.address);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     balanceAfter = await USDC.balanceOf(DAO.address);
 

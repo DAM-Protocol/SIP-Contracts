@@ -5,12 +5,10 @@ const TestGovernance = require("@superfluid-finance/ethereum-contracts/build/con
 const SuperfluidLoader = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperfluidLoader.json");
 const Superfluid = require("@superfluid-finance/ethereum-contracts/build/contracts/Superfluid.json");
 const ConstantFlowAgreementV1 = require("@superfluid-finance/ethereum-contracts/build/contracts/ConstantFlowAgreementV1.json");
-// const InstantDistributionAgreementV1 = require("@superfluid-finance/ethereum-contracts/build/contracts/InstantDistributionAgreementV1.json");
 const SlotsBitmapLibrary = require("@superfluid-finance/ethereum-contracts/build/contracts/SlotsBitmapLibrary.json");
 const SuperTokenFactoryHelper = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperTokenFactoryHelper.json");
 const SuperTokenFactory = require("@superfluid-finance/ethereum-contracts/build/contracts/SuperTokenFactory.json");
 
-// const contract = await deploy(Contract.abi, Contract.bytecode, signer, [arg0, arg1])
 async function deploy(abi, bytecode, signer, constructorArgs = []) {
   const factory = new ethers.ContractFactory(abi, bytecode, signer);
   return await factory.deploy(...constructorArgs);

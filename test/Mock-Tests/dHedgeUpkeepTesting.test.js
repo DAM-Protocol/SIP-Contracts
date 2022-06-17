@@ -339,7 +339,6 @@ describe("Upkeep Mock Testing", function () {
     expect(token1).to.equal(DAI.address);
 
     await app.dHedgeDeposit(token1);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     await startAndSub(USDCWhale, [USDC.address, USDCx.address], userFlowRate);
 
@@ -347,17 +346,13 @@ describe("Upkeep Mock Testing", function () {
 
     token2 = await app.requireUpkeep();
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.dHedgeDeposit(token2);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     token3 = await app.requireUpkeep();
 
     expect(token2).to.not.equal(token3);
 
-    await mockPool.setExitRemainingCooldown(app.address, "0");
     await app.dHedgeDeposit(token3);
-    await mockPool.setExitRemainingCooldown(app.address, getSeconds(1));
 
     token4 = await app.requireUpkeep();
 

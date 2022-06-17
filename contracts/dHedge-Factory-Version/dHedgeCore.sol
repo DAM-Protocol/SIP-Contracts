@@ -177,18 +177,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.tokenData[_underlyingToken].assignedIndex[_user];
     }
 
-    /// Calculates uninvested token amount of a particular user.
-    /// @param _user Address of the user whose uninvested amount needs to be calculated.
-    /// @param _superToken Address of the supertoken.
-    /// @return Amount of uninvested tokens.
-    function calcUserUninvested(
-        address _user,
-        ISuperToken _superToken,
-        uint64 _delay
-    ) public view override returns (uint256) {
-        return poolData.calcUserUninvested(_user, _superToken, _delay);
-    }
-
     /// Calculates buffer transfer amount required to start a stream or update a stream.
     /// @param _user Address of the user whose buffer transfer amount needs calculation.
     /// @param _superToken Address of the supertoken.
@@ -212,6 +200,20 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _flowRate
         );
     }
+    
+    /// Calculates uninvested token amount of a particular user.
+    /// @param _user Address of the user whose uninvested amount needs to be calculated.
+    /// @param _superToken Address of the supertoken.
+    /// @param _delay  Useful in case transaction times are high as extra amount can be given.
+    /// @return Amount of uninvested tokens.
+    function calcUserUninvested(
+        address _user,
+        ISuperToken _superToken,
+        uint64 _delay
+    ) public view override returns (uint256) {
+        return poolData.calcUserUninvested(_user, _superToken, _delay);
+    }
+
 
     /// Checks if deposit action can be performed.
     /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool.
