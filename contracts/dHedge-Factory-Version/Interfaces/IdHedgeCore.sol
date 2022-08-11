@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.10;
 
-import { ISuperToken } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 
 interface IdHedgeCore {
     event EmergencyWithdraw(address token);
@@ -30,6 +30,12 @@ interface IdHedgeCore {
             uint32,
             uint32
         );
+
+    function getSubscriptionIndex(
+        address _user,
+        address _underlyingToken,
+        uint8 _streamAction
+    ) external view returns (uint32);
 
     function calcUserUninvested(
         address _user,

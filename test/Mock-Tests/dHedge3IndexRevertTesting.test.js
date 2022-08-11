@@ -21,7 +21,7 @@ describe("3-Index Approach Revert Mock Testing", function () {
 
   let sf, resolverAddress, superTokenFactory;
   // let USDCWhale, DAIWhale, DAIWhale2;
-  let DAI, USDC, WBTC;
+  let DAI, USDC, WBTC, DHPT;
   let mockPool, mockPoolFactory;
   let USDCx, DAIx, WBTCx, DHPTx;
   let dHedgeHelper, dHedgeStorage, dHedgeMath, SFHelper;

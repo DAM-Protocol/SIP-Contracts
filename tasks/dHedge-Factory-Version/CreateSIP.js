@@ -11,24 +11,20 @@ task("CreateSIP", "Creates a SIP contract for a dHEDGE pool")
     const dHedgeCoreFactory = await ethers.getContractAt(
       "dHedgeCoreFactory",
       dHedgeCoreFactoryABI.address
-    ); // Complete this after deployment of infrastructure
-
-    console.info(
-      `\n--Deploying core contract for dHedge pool ${taskArgs.pool}--\n`
     );
 
-    await dHedgeCoreFactory.createdHedgeCore(
+    console.info(`Deploying core contract for dHedge pool ${taskArgs.pool}`);
+
+    const tx = await dHedgeCoreFactory.createdHedgeCore(
       taskArgs.pool,
       taskArgs.supertoken
     );
 
-    const getNewCore = async () => await dHedgeCoreFactory.cores(taskArgs.pool);
-    let newCore;
-    while (
-      (newCore = await getNewCore()) ===
-      "0x0000000000000000000000000000000000000000"
-    ) {
-      setTimeout(getNewCore, 2000);
-    }
-    console.info(`\n--Deployed core contract at ${newCore}--\n`);
+    await tx.wait();
+
+    console.info(
+      `Deployed core contract. Check ${tx.hash} on polygonscan for more info`
+    );
+
+    console.warn("You still have to initialize markets for individual tokens!");
   });

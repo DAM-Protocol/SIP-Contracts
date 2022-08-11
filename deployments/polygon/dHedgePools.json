@@ -6,5 +6,9 @@
     "0xe2bbe551f754e87b776e75fe289174da0eb0e299": {
         "superToken": "0x14FEf777dDdF3C4B0BfD163d7973089c79cfBFE5",
         "core": "0x22fb1fa0c61db819fec42bdabf0559d80b9e043b"
+    },
+    "0x027da30fadab6202801f97be344e2348a2a92842": {
+        "superToken": "0x37eac6deae4e7c9709446ef017bb5260718172b7",
+        "core": "0x5914457fe339ca795841c72426332ae01ca4fb25"
     }
 }

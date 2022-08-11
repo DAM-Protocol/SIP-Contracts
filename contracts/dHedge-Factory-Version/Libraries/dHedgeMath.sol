@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.10;
 
-import { IERC20Mod } from "../../Common/IERC20Mod.sol";
+import {IERC20Mod} from "../../Common/IERC20Mod.sol";
 import "./dHedgeStorage.sol";
 import "../../Common/SFHelper.sol";
 import "hardhat/console.sol";
@@ -126,7 +126,8 @@ library dHedgeMath {
 
         return
             _userFlowRate *
-            (block.timestamp + _delay -
+            (block.timestamp +
+                _delay -
                 (
                     (tokenData.assignedIndex[_user] ==
                         tokenData.permDistIndex1.indexId)
@@ -158,10 +159,22 @@ library dHedgeMath {
         int96 _flowRate,
         uint256 _userUninvested
     ) internal view returns (uint256 _transferAmount, bool _isTaken) {
+        console.log(
+            "Delay: %s, lastDeposit: %s, flowRate: %s",
+            _delay,
+            _lastDepositAt,
+            uint256(uint96(_flowRate))
+        );
 
         // Calculate how much amount needs to be deposited upfront.
         uint256 _depositAmount = (block.timestamp + _delay - _lastDepositAt) *
             uint256(uint96(_flowRate));
+
+        console.log(
+            "Deposit amount: %s, Uninvested: %s",
+            _depositAmount,
+            _userUninvested
+        );
 
         // If amount to be deposited is greater than user's uninvested amount then,
         // transfer the difference from the user.

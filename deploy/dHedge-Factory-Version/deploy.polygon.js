@@ -26,8 +26,6 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
       dHedgeCoreFactory.address
     );
 
-    // console.log("dHedgeCoreFactory: ", dHedgeCoreFactory);
-
     DAOAddr = await dHedgeCoreFactoryContract.dao();
     feeRate = await dHedgeCoreFactoryContract.defaultFeeRate();
   }
@@ -144,11 +142,6 @@ module.exports = async function ({ deployments, getNamedAccounts }) {
     try {
       await hre.run("verify:verify", {
         address: dHedgeCoreImplementation,
-        // libraries: {
-        //   // SFHelper: SFHelper.address,
-        //   dHedgeHelper: dHedgeHelper.address,
-        //   // dHedgeMath: dHedgeMath.address,
-        // },
         contract: "contracts/dHedge-Factory-Version/dHedgeCore.sol:dHedgeCore",
       });
     } catch (error) {

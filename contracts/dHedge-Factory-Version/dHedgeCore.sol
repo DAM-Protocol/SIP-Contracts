@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.10;
 
-import { ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
-import { IConstantFlowAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
-import { IInstantDistributionAgreementV1 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
-import { SuperAppBase } from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
+import {ISuperfluid, ISuperToken, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
+import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -34,7 +34,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     using dHedgeMath for *;
 
     // Struct containing all the relevant data regarding the dHedgePool this dHedgeCore serves.
-    dHedgeStorage.dHedgePool private poolData;
+    dHedgeStorage.dHedgePool public poolData;
 
     /// @dev Initialize the factory.
     /// @param _dHedgePool dHEDGE pool contract address.
@@ -177,6 +177,45 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
         return poolData.tokenData[_underlyingToken].assignedIndex[_user];
     }
 
+    /// Gets the index id for a user based on the stream action (start/update/terminate) they want to perform.
+    /// @dev This function needs to be called prior to the stream action transaction.
+    ///     This function was specially written for Superfluid batch calls.
+    /// @param _user Address of the user performing a stream action.
+    /// @param _underlyingToken Address of the underlying token.
+    /// @param _streamAction 1 for create, 2 for update and 3 for terminate.
+    /// @return _indexId Index ID the user should subscribe to in the future.
+    function getSubscriptionIndex(
+        address _user,
+        address _underlyingToken,
+        uint8 _streamAction
+    ) external view returns (uint32 _indexId) {
+        dHedgeStorage.TokenData storage tokenData = poolData.tokenData[
+            _underlyingToken
+        ];
+        uint32 _lockedIndexId = tokenData.lockedIndexId;
+        uint32 _indexId1 = tokenData.permDistIndex1.indexId;
+        uint32 _indexId2 = tokenData.permDistIndex2.indexId;
+
+        // New stream creation action.
+        if (_streamAction == 1) {
+            return (_lockedIndexId == _indexId1) ? _indexId2 : _indexId1;
+        } else if (_streamAction == 2) {
+            // Streamrate updated.
+            if (tokenData.distAmount != 0) {
+                // If distribution hasn't happened for the previous cycle then, select the unlocked index.
+                return (_lockedIndexId == _indexId1) ? _indexId2 : _indexId1;
+            } else {
+                return tokenData.assignedIndex[_user];
+            }
+        } else if (_streamAction == 3) {
+            return
+                (tokenData.distAmount != 0 &&
+                    tokenData.assignedIndex[_user] == _lockedIndexId)
+                    ? tokenData.tempDistIndex
+                    : 0;
+        }
+    }
+
     /// Calculates buffer transfer amount required to start a stream or update a stream.
     /// @param _user Address of the user whose buffer transfer amount needs calculation.
     /// @param _superToken Address of the supertoken.
@@ -200,7 +239,7 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
             _flowRate
         );
     }
-    
+
     /// Calculates uninvested token amount of a particular user.
     /// @param _user Address of the user whose uninvested amount needs to be calculated.
     /// @param _superToken Address of the supertoken.
@@ -213,7 +252,6 @@ contract dHedgeCore is Initializable, SuperAppBase, IdHedgeCore {
     ) public view override returns (uint256) {
         return poolData.calcUserUninvested(_user, _superToken, _delay);
     }
-
 
     /// Checks if deposit action can be performed.
     /// @return Address of the underlying/deposit token which needs to be deposited to the dHedge pool.
